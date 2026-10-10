@@ -145,11 +145,11 @@ public class FormularioService {
     private void preencherRespostaVersionada(Resposta resposta, RespostaDTO dto, FormularioVersao versao) {
         String codigo = dto.questionId;
         PerguntaVersao pergunta = perguntaVersaoRepository.findByVersionAndCode(versao.getId(), codigo);
-        if (pergunta == null) throw new IllegalArgumentException("Pergunta nao pertence ao formulario informado");
+        if (pergunta == null || !pergunta.isAtivo()) throw new IllegalArgumentException("Pergunta nao pertence ao formulario informado");
         if (dto.questionText != null && !dto.questionText.isBlank() && !dto.questionText.equals(pergunta.getTexto()))
             throw new IllegalArgumentException("Texto da pergunta nao corresponde a versao informada");
         OpcaoPergunta opcao = opcaoPerguntaRepository.findByQuestionAndCode(pergunta.getId(), dto.optionCode);
-        if (opcao == null) throw new IllegalArgumentException("Opcao de resposta invalida para a pergunta informada");
+        if (opcao == null || !opcao.isAtivo()) throw new IllegalArgumentException("Opcao de resposta invalida para a pergunta informada");
         resposta.setPerguntaVersao(pergunta);
         resposta.setOpcaoCodigo(opcao.getCodigo());
         resposta.setOpcaoRotulo(opcao.getRotulo());
@@ -171,13 +171,13 @@ public class FormularioService {
         if (dto.subjects == null || dto.subjects.isEmpty())
             throw new IllegalArgumentException("Ao menos uma disciplina deve ser informada");
         Curso curso = cursoRepository.findByNome(dto.course.name);
-        if (curso == null) throw new IllegalArgumentException("Curso informado nao existe");
+        if (curso == null || !curso.isAtivo()) throw new IllegalArgumentException("Curso informado nao existe");
         for (SubjectDTO subject : dto.subjects) {
             validarSubject(subject);
             Disciplina disciplina;
             try { disciplina = disciplinaRepository.findByIdAndCurso(Long.parseLong(subject.subjectId), curso.getId()); }
             catch (NumberFormatException e) { throw new IllegalArgumentException("Identificador da disciplina invalido"); }
-            if (disciplina == null) throw new IllegalArgumentException("Disciplina informada nao existe para o curso");
+            if (disciplina == null || !disciplina.isAtivo()) throw new IllegalArgumentException("Disciplina informada nao existe para o curso");
             persistirAvaliacao(publico, versao, disciplina, subject.answers, subject.comment);
         }
     }

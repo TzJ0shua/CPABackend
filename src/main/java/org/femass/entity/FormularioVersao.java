@@ -5,6 +5,11 @@ import jakarta.persistence.*;
 @Entity
 @Table(name = "FORMULARIO_VERSAO", uniqueConstraints = @UniqueConstraint(columnNames = {"formulario_id", "numero"}))
 public class FormularioVersao {
+    @Column(nullable = false)
+    private boolean ativo = true;
+    public boolean isAtivo() { return ativo; }
+    public void setAtivo(boolean ativo) { this.ativo = ativo; }
+
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 

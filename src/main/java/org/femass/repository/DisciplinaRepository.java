@@ -18,6 +18,6 @@ public class DisciplinaRepository implements PanacheRepositoryBase<Disciplina, L
     }
 
     public List<Disciplina> findAllWithCursoOrdered() {
-        return find("from Disciplina d join fetch d.curso order by d.curso.nome, d.nome").list();
+        return find("from Disciplina d join fetch d.curso where d.ativo = true and d.curso.ativo = true order by d.curso.nome, d.nome").list();
     }
 }

@@ -5,6 +5,11 @@ import jakarta.persistence.*;
 @Entity
 @Table(name = "OPCAO_PERGUNTA", uniqueConstraints = @UniqueConstraint(columnNames = {"pergunta_versao_id", "codigo"}))
 public class OpcaoPergunta {
+    @Column(nullable = false)
+    private boolean ativo = true;
+    public boolean isAtivo() { return ativo; }
+    public void setAtivo(boolean ativo) { this.ativo = ativo; }
+
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
@@ -17,7 +22,8 @@ public class OpcaoPergunta {
     @Column(nullable = false, length = 100)
     private String rotulo;
 
-    @Column(nullable = false)
+    // Matches the existing schema: "não sei responder" has no numeric value.
+    @Column
     private Integer valor;
 
     @Column(name = "NAO_SEI_RESPONDER", nullable = false)

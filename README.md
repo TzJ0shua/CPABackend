@@ -520,3 +520,68 @@ recriados para executar esta sequência, pois os checksums do Flyway mudaram.
 Em caso de rollback, faça backup e confirme que não existem FKs dependentes;
 depois aplique uma migration corretiva compatível com os registros legados,
 que têm `NEW_HASH` nulo. `OLD_TOKEN` não deve voltar a ser usado na validação.
+# Administração autenticada
+
+As APIs `/admin/*` exigem token OIDC válido, audiência `cpa-backend` (ou o valor de
+`KEYCLOAK_CLIENT_ID`) e papel de realm `cpa-admin`. O frontend administrativo usa
+o cliente público `cpa-frontend`, com Authorization Code e PKCE S256.
+
+O arquivo `docker/keycloak/realm-cpa.json` inclui o cliente para instalações novas.
+Configure `KEYCLOAK_FRONTEND_URL` com a origem do frontend (sem barra final;
+padrão `http://localhost:5173`). Configure também `KEYCLOAK_PUBLIC_URL` com a URL
+pública do Keycloak. O backend pode usar a URL interna em
+`KEYCLOAK_AUTH_SERVER_URL`; os tokens devem ter o issuer público anunciado pelo
+Keycloak e a audiência da API.
+
+## Realm já existente
+
+O `--import-realm` não atualiza um realm existente. No console do Keycloak:
+
+1. Crie o cliente OpenID Connect `cpa-frontend`, com Client authentication
+   desabilitado, Standard Flow habilitado e Direct Access Grants desabilitado.
+2. Em Advanced, exija PKCE `S256`. Cadastre apenas a origem real do frontend em
+   Web Origins; em Valid Redirect URIs, cadastre `ORIGEM/admin` e `ORIGEM/admin/*`;
+   em Valid Post Logout Redirect URIs, cadastre `ORIGEM/`.
+3. No client scope dedicado, adicione um mapper Audience com Included Client
+   Audience `cpa-backend`, Add to access token habilitado e Add to ID token
+   desabilitado. Garanta que o scope padrão `roles` inclua `realm_access.roles`.
+4. Atribua o papel de realm `cpa-admin` aos usuários autorizados. A gestão de contas
+   continua no Keycloak.
+5. Se usar o cliente antigo `cpa-dev-cli`, adicione nele a mesma audiência da API.
+6. Configure no frontend `VITE_KEYCLOAK_URL` (URL pública sem `/realms/cpa`),
+   `VITE_KEYCLOAK_REALM=cpa` e `VITE_KEYCLOAK_CLIENT_ID=cpa-frontend`; reconstrua
+   a imagem. Configure `QUARKUS_HTTP_CORS_ORIGINS` para a origem exata do frontend.
+
+## Cadastros e desativação
+
+Há listagem, consulta e edição em `/admin/campanhas`, `/admin/cursos` e
+`/admin/disciplinas` (filtro opcional `cursoId`). Formulários e versões estão sob
+`/admin/campanhas/{codigo}/formularios`. Os endpoints existentes de clonagem,
+publicação, aprovação, abertura e encerramento permanecem disponíveis.
+
+Use `PATCH .../status` com `{"ativo":false}` para desativar e `{"ativo":true}`
+para reativar campanhas, cursos, disciplinas, formulários e versões. A migração
+Flyway V13 mantém os registros anteriores ativos. Não há exclusão física.
+Filhos de pais inativos ficam indisponíveis na pesquisa, mas mantêm o próprio
+estado. Respostas históricas continuam acessíveis.
+
+Perguntas e opções têm `ativo` no payload administrativo (padrão `true` quando
+omitido). Ao salvar um rascunho, códigos existentes preservam seus IDs; itens
+omitidos são desativados. Versões publicadas não aceitam edição de conteúdo.
+Publicação exige perguntas ativas com opções ativas. Os endpoints públicos
+filtram inativos e rejeitam novos envios referenciando cadastros desativados.
+
+Erros administrativos retornam JSON com `message`: `400` para validação,
+`404` para registros inexistentes, `409` para conflitos, `401` para ausência de
+autenticação e `403` para falta de permissão.
+
+## Testes administrativos
+
+`AdminCadastrosResourceTest` verifica edição, desativação, hierarquia,
+preservação de IDs e histórico. `AdminOidcResourceTest` habilita OIDC e usa um
+servidor de teste com discovery/JWKS e tokens RSA assinados, sem `TestSecurity`;
+verifica assinatura, expiração, audiência e papéis. Não utiliza o Keycloak real.
+
+Execute os testes contra um banco PostgreSQL descartável, definindo
+`QUARKUS_DATASOURCE_JDBC_URL`, `QUARKUS_DATASOURCE_USERNAME` e
+`QUARKUS_DATASOURCE_PASSWORD`, e use Java 21 com `./mvnw test`.

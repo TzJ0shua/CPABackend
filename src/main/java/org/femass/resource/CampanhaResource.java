@@ -31,7 +31,7 @@ public class CampanhaResource {
         DisponibilidadeCampanhaDTO dto = new DisponibilidadeCampanhaDTO(
                 campanha.getCodigo(),
                 campanha.getEstado(),
-                campanha.getEstado() == EstadoCampanha.ABERTA,
+                campanha.isAtiva() && campanha.getEstado() == EstadoCampanha.ABERTA,
                 campanha.getMensagemDisponibilidade()
         );
         return Response.ok(dto).build();

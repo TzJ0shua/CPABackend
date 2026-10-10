@@ -43,10 +43,10 @@ public class FormularioCatalogoService {
     private List<PerguntaCatalogoDTO> buscarPerguntas(FormularioVersao versao) {
         return versao.getFormulario().getId() == null ? List.of() :
                 entityManager.createQuery(
-                        "from PerguntaVersao p where p.formularioVersao.id = :id order by p.ordem", PerguntaVersao.class)
+                        "from PerguntaVersao p where p.formularioVersao.id = :id and p.ativo = true order by p.ordem", PerguntaVersao.class)
                         .setParameter("id", versao.getId()).getResultList().stream()
                         .map(p -> new PerguntaCatalogoDTO(p.getCodigo(), p.getTexto(), p.getOrdem(),
-                                opcaoRepository.find("pergunta.id = ?1 order by ordem", p.getId()).list().stream()
+                                opcaoRepository.find("pergunta.id = ?1 and ativo = true order by ordem", p.getId()).list().stream()
                                         .sorted(Comparator.comparing(OpcaoPergunta::getOrdem))
                                         .map(o -> new OpcaoCatalogoDTO(o.getCodigo(), o.getRotulo(), o.getValor(), o.isNaoSeiResponder())).toList()))
                         .toList();
