@@ -7,8 +7,6 @@ import org.femass.entity.PublicoAvaliacao;
 import org.femass.entity.StatusVerificacaoEmail;
 import org.femass.entity.VerificacaoEmail;
 
-import java.time.LocalDateTime;
-
 @ApplicationScoped
 public class VerificacaoEmailRepository implements PanacheRepositoryBase<VerificacaoEmail, Long> {
 
@@ -18,10 +16,6 @@ public class VerificacaoEmailRepository implements PanacheRepositoryBase<Verific
                 emailDigest, publico, campanha, formulario, versao, StatusVerificacaoEmail.PENDENTE)
                 .withLock(LockModeType.PESSIMISTIC_WRITE)
                 .firstResult();
-    }
-
-    public long countSolicitacoesDesde(String emailDigest, LocalDateTime desde) {
-        return count("emailDigest = ?1 and dataCriacao >= ?2", emailDigest, desde);
     }
 
     public VerificacaoEmail findByIdForUpdate(Long id) {

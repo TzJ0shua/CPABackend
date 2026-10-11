@@ -54,9 +54,7 @@ public class VerificacaoEmailResource {
             return Response.status(409).entity(new ErrorResponseDTO(e.getMessage())).build();
         } catch (IllegalArgumentException e) {
             return Response.status(Response.Status.BAD_REQUEST).entity(new ErrorResponseDTO(e.getMessage())).build();
-        } catch (IllegalStateException e) {
-            return Response.status(Response.Status.TOO_MANY_REQUESTS).entity(new ErrorResponseDTO("Solicitacao indisponivel no momento")).build();
-        } catch (EmailDeliveryException e) {
+        } catch (IllegalStateException | EmailDeliveryException e) {
             return Response.status(Response.Status.SERVICE_UNAVAILABLE)
                     .entity(new ErrorResponseDTO("Servico de e-mail indisponivel no momento")).build();
         } catch (Exception e) {

@@ -20,7 +20,6 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Optional;
 
@@ -35,9 +34,6 @@ public class VerificacaoEmailService {
     @Inject EmailSender emailSender;
     @ConfigProperty(name = "verificacao-email.pin-expiracao", defaultValue = "PT2H") Duration pinExpiracao;
     @ConfigProperty(name = "verificacao-email.autorizacao-expiracao", defaultValue = "PT15M") Duration autorizacaoExpiracao;
-    @ConfigProperty(name = "verificacao-email.max-tentativas", defaultValue = "5") int maxTentativas;
-    @ConfigProperty(name = "verificacao-email.max-reenvios-janela", defaultValue = "3") int maxReenviosJanela;
-    @ConfigProperty(name = "verificacao-email.janela-reenvio", defaultValue = "PT1H") Duration janelaReenvio;
     @ConfigProperty(name = "verificacao-email.email-digest-secret") String emailDigestSecret;
     @ConfigProperty(name = "verificacao-email.chave-mestra") Optional<String> chaveMestra;
 
@@ -103,10 +99,6 @@ public class VerificacaoEmailService {
             throw new IllegalArgumentException("Formulário publicado não disponível");
         String emailDigest = calcularEmailDigest(dados.email());
         LocalDateTime agora = LocalDateTime.now();
-        if (repository.countSolicitacoesDesde(emailDigest, agora.minus(janelaReenvio)) >= maxReenviosJanela) {
-            throw new IllegalStateException("Limite de solicitacoes excedido. Tente novamente mais tarde");
-        }
-
         VerificacaoEmail anterior = repository.findPendenteForUpdate(emailDigest, dados.publico(), dados.campanha(), dados.formulario(), dados.versao());
         int reenvios = 0;
         if (anterior != null) {
@@ -153,15 +145,9 @@ public class VerificacaoEmailService {
             verificacao.setStatus(StatusVerificacaoEmail.INVALIDADO);
             throw new IllegalStateException("Codigo de verificacao expirado");
         }
-        if (verificacao.getTentativas() >= maxTentativas) {
-            verificacao.setStatus(StatusVerificacaoEmail.INVALIDADO);
-            throw new IllegalStateException("Limite de tentativas excedido");
-        }
-
         verificacao.setTentativas(verificacao.getTentativas() + 1);
         if (!MessageDigest.isEqual(calcularDigest(dto.pin).getBytes(StandardCharsets.US_ASCII),
                 verificacao.getCodigoDigest().getBytes(StandardCharsets.US_ASCII))) {
-            if (verificacao.getTentativas() >= maxTentativas) verificacao.setStatus(StatusVerificacaoEmail.INVALIDADO);
             throw new IllegalArgumentException("Codigo de verificacao invalido");
         }
 

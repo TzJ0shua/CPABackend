@@ -19,6 +19,7 @@ import static org.mockito.Mockito.verify;
 
 @QuarkusTest
 class VerificacaoEmailResourceTest {
+    @jakarta.inject.Inject jakarta.persistence.EntityManager entityManager;
     @jakarta.inject.Inject CampaignTestFixtures campaignFixtures;
     @org.junit.jupiter.api.BeforeEach void scheduleFixture() {
         campaignFixtures.scheduleSeed();
@@ -27,6 +28,53 @@ class VerificacaoEmailResourceTest {
     @org.junit.jupiter.api.AfterEach void clearFixture() { campaignFixtures.clearSeed(); }
     @InjectMock
     EmailSender emailSender;
+
+    @Test
+    void permiteReenviosETentativasSemLimiteEInvalidaSomentePinAnterior() {
+        String email = "sem-limite-" + UUID.randomUUID().toString().replaceAll("[0-9]", "a") + "@femass.edu.br";
+        String request = """
+                {"email":"%s","publico":"professor","campaign":"cpa-2026","form":"docente_gestao","formVersion":1}
+                """.formatted(email);
+        java.util.List<Number> ids = new java.util.ArrayList<>();
+        for (int i = 0; i < 8; i++) ids.add(given().contentType("application/json").body(request)
+                .post("/verificacao-email/solicitar").then().statusCode(202).extract().path("verificationId"));
+        ArgumentCaptor<String> pins = ArgumentCaptor.forClass(String.class);
+        verify(emailSender, times(8)).enviarPin(anyString(), pins.capture());
+        given().contentType("application/json").body(java.util.Map.of("verificationId", ids.get(0), "pin", pins.getAllValues().get(0)))
+                .post("/verificacao-email/confirmar").then().statusCode(400);
+        Number lastId = ids.get(7);
+        // Um contador persistido acima do antigo limite também não bloqueia a confirmação.
+        io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> entityManager.createQuery(
+                "update VerificacaoEmail set tentativas = 1000 where id = :id").setParameter("id", lastId.longValue()).executeUpdate());
+        for (int i = 0; i < 8; i++) given().contentType("application/json").body(java.util.Map.of("verificationId", lastId, "pin", "INCORRETO"))
+                .post("/verificacao-email/confirmar").then().statusCode(400);
+        given().contentType("application/json").body(java.util.Map.of("verificationId", lastId, "pin", pins.getAllValues().get(7)))
+                .post("/verificacao-email/confirmar").then().statusCode(200).body("submissionToken", notNullValue());
+    }
+
+    @Test
+    void codigoExpiradoContinuaBloqueado() {
+        String email = "expirado-" + UUID.randomUUID().toString().replaceAll("[0-9]", "a") + "@femass.edu.br";
+        Number id = given().contentType("application/json").body(java.util.Map.of("email", email, "publico", "funcionario",
+                "campaign", "cpa-2026", "form", "funcionario_gestao", "formVersion", 1))
+                .post("/verificacao-email/solicitar").then().statusCode(202).extract().path("verificationId");
+        ArgumentCaptor<String> pin = ArgumentCaptor.forClass(String.class);
+        verify(emailSender).enviarPin(anyString(), pin.capture());
+        io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> entityManager.createQuery(
+                "update VerificacaoEmail set expiraEm = :expiry where id = :id")
+                .setParameter("expiry", java.time.LocalDateTime.now().minusMinutes(1)).setParameter("id", id.longValue()).executeUpdate());
+        given().contentType("application/json").body(java.util.Map.of("verificationId", id, "pin", pin.getValue()))
+                .post("/verificacao-email/confirmar").then().statusCode(400);
+    }
+
+    @Test
+    void falhaDeServicoNaoRetornaRateLimit() {
+        org.mockito.Mockito.doThrow(new IllegalStateException("Falha no serviço de envio"))
+                .when(emailSender).enviarPin(anyString(), anyString());
+        given().contentType("application/json").body(java.util.Map.of("email", "professor@femass.edu.br", "publico", "professor",
+                "campaign", "cpa-2026", "form", "docente_gestao", "formVersion", 1))
+                .post("/verificacao-email/solicitar").then().statusCode(503);
+    }
 
     @Test
     void deveAutorizarTodosOsFormulariosDaJornadaDoProfessor() {

@@ -42,6 +42,8 @@ A migração `V16__limit_email_participation_per_version.sql` adiciona `VALIDACA
 
 A identidade vem exclusivamente da autorização confirmada no servidor. O email informado em `respondent` não substitui essa identidade. O endereço é normalizado sem espaços nas extremidades e em minúsculas, e apenas seu HMAC-SHA-256 é persistido. Mantenha `VERIFICACAO_EMAIL_DIGEST_SECRET` estável: trocá-lo altera os digests e compromete o controle das participações anteriores. A autorização pode continuar sendo usada para outros formulários durante sua validade. Todas as disciplinas de uma versão devem ser enviadas juntas.
 
+Não há limite de solicitações, reenvios por janela ou tentativas de confirmação do PIN imposto pelo backend. Reenviar gera um novo código e invalida o PIN anterior; um PIN incorreto retorna `400` sem bloquear novas tentativas de um código ainda válido. A expiração do PIN e da autorização, a validação do email institucional e a resposta única por email e versão continuam em vigor. Quotas impostas pelo provedor Gmail não são configuradas por esta aplicação.
+
 **A chave mestra é uma exceção ao limite por email**, inclusive quando o serviço de email está indisponível. A migração identifica autorizações antigas por chave que não passaram pela confirmação de PIN. Validações salvas antes da V16 não possuem o digest de identidade e não podem ser associadas retroativamente a um email; o controle começa nos novos envios. O email e seu digest não são retornados no comprovante ou no resumo do validador.
 
 ### Campo de comentários
@@ -84,9 +86,6 @@ VALIDACAO_CODIGO_EXPIRACAO=PT336H
 VALIDACAO_ALUNO_HASH_SEED=substitua-por-um-segredo-aleatorio-com-32-bytes-ou-mais
 VERIFICACAO_EMAIL_PIN_EXPIRACAO=PT2H
 VERIFICACAO_EMAIL_AUTORIZACAO_EXPIRACAO=PT15M
-VERIFICACAO_EMAIL_MAX_TENTATIVAS=5
-VERIFICACAO_EMAIL_MAX_REENVIOS_JANELA=3
-VERIFICACAO_EMAIL_JANELA_REENVIO=PT1H
 VERIFICACAO_EMAIL_DIGEST_SECRET=gere-um-segredo-longo-e-aleatorio
 VERIFICACAO_EMAIL_CHAVE_MESTRA=
 
@@ -153,9 +152,6 @@ O Compose também define `KC_HEALTH_ENABLED=true` e `KC_HOSTNAME_BACKCHANNEL_DYN
 | `VALIDACAO_ALUNO_HASH_SEED` | Chave secreta do HMAC-SHA-256 usado para CPF e matrícula dos alunos. | Obrigatória para envios de alunos; mínimo de 32 bytes UTF-8, sem padrão. Nunca use `VITE_`. |
 | `VERIFICACAO_EMAIL_PIN_EXPIRACAO` | Validade do PIN enviado por e-mail. | `PT2H`. |
 | `VERIFICACAO_EMAIL_AUTORIZACAO_EXPIRACAO` | Validade da autorização de envio após confirmar o PIN. | `PT15M`. |
-| `VERIFICACAO_EMAIL_MAX_TENTATIVAS` | Limite de tentativas de confirmação do PIN. | `5`. |
-| `VERIFICACAO_EMAIL_MAX_REENVIOS_JANELA` | Limite de solicitações na janela de reenvio. | `3`. |
-| `VERIFICACAO_EMAIL_JANELA_REENVIO` | Duração da janela de limitação de reenvios. | `PT1H`. |
 | `VERIFICACAO_EMAIL_DIGEST_SECRET` | Segredo usado para calcular o digest dos endereços de e-mail. | Configure um segredo longo e aleatório; não utilize os fallbacks locais em produção. |
 | `VERIFICACAO_EMAIL_CHAVE_MESTRA` | Chave compartilhada para acesso aos formulários de professor e funcionário, como alternativa ao PIN de email. | Vazia por padrão (acesso por chave desabilitado). Configure somente no backend, com um valor longo e aleatório de até 1024 caracteres. |
 | `VERIFICACAO_EMAIL_GMAIL_ENABLED` | Habilita envio real pela Gmail API. | `false`. |
@@ -185,6 +181,7 @@ As variáveis `VITE_` são públicas e lidas durante o build, não pelo Nginx em
 | --- | --- |
 | `VITE_CPA_CAMPAIGN` | Não é mais consumida. A campanha é selecionada automaticamente por `/campanhas/atual/disponibilidade`, considerando ativação, estado e período. Pode ser removida. |
 | `KEYCLOAK_DB_PASSWORD` | Não é consumida pelo Compose atual. O Keycloak usa `start-dev`, sem banco externo configurado; esta chave não muda sua senha nem o banco da aplicação. Um banco externo exige configuração explícita do serviço Keycloak. |
+| `VERIFICACAO_EMAIL_MAX_TENTATIVAS`, `VERIFICACAO_EMAIL_MAX_REENVIOS_JANELA`, `VERIFICACAO_EMAIL_JANELA_REENVIO` | Removidas: não são consumidas pelo backend ou pelo Compose. Podem ser retiradas do `.env`; não há limites de tentativas, solicitações ou reenvios na aplicação. |
 
 ### Variáveis das imagens Java alternativas
 
