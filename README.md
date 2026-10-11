@@ -623,6 +623,24 @@ depois aplique uma migration corretiva compatível com os registros legados,
 que têm `NEW_HASH` nulo. `OLD_TOKEN` não deve voltar a ser usado na validação.
 # Administração autenticada
 
+## Clonagem entre campanhas e remoção de perguntas
+
+`POST /admin/campanhas/{codigoDestino}/formularios/clonar` exige `cpa-admin` e cria um novo formulário ativo com versão 1 em rascunho:
+
+```json
+{
+  "campanhaOrigem": "cpa-2025",
+  "formularioOrigem": "discente_gestao",
+  "versaoOrigem": 1,
+  "codigo": "discente_gestao",
+  "nome": "Avaliação de gestão"
+}
+```
+
+A resposta `201` contém `{ "codigo": "discente_gestao", "versao": 1 }`. O nome é opcional: quando omitido, é copiado da versão escolhida. Origem e destino devem ser campanhas diferentes; a origem pode estar encerrada ou inativa, e pode-se selecionar qualquer versão existente. O destino precisa estar em rascunho ou aprovado e volta a rascunho após a cópia. Metadados, comentários, perguntas, opções e seus estados individuais de ativação são copiados com novos identificadores, sem alterar a origem ou suas respostas. Os bloqueios das campanhas são adquiridos em ordem para preservar a consistência em operações concorrentes. Código duplicado no destino e destino fora da configuração retornam `409`, dados inválidos `400` e origem/destino/versão inexistente `404`.
+
+A edição de rascunhos continua em `PUT /admin/campanhas/{codigo}/formularios/{formulario}/versoes/{numero}`. Perguntas removidas da lista ou enviadas com `ativo: false` são desativadas, preservando identificadores e opções. Uma lista vazia `perguntas: []` pode ser salva como rascunho; publicação exige pelo menos uma pergunta ativa com opções ativas. Versões publicadas não podem ter perguntas removidas ou editadas; clone uma versão antes de alterar seu conteúdo. A clonagem da versão mais recente dentro do mesmo formulário continua disponível no endpoint existente.
+
 As APIs `/admin/*` exigem token OIDC válido, audiência `cpa-backend` (ou o valor de
 `KEYCLOAK_CLIENT_ID`) e papel de realm `cpa-admin`. O frontend administrativo usa
 o cliente público `cpa-frontend`, com Authorization Code e PKCE S256.

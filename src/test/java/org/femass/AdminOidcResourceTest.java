@@ -69,12 +69,14 @@ class AdminOidcResourceTest {
         long expires = Instant.now().getEpochSecond() + 300;
         given().get("/admin/cursos").then().statusCode(401).contentType("application/json").body("message", notNullValue());
         given().contentType("application/json").body(Map.of("nome", "Sem autenticação")).post("/admin/cursos").then().statusCode(401);
+        given().contentType("application/json").body("{}").post("/admin/campanhas/cpa-2026/formularios/clonar").then().statusCode(401);
         given().header("Authorization", "Bearer inválido").get("/admin/cursos").then().statusCode(401);
         given().auth().oauth2(OidcServer.token("cpa-admin", "cpa-backend", Instant.now().getEpochSecond() - 60)).get("/admin/cursos").then().statusCode(401);
         given().auth().oauth2(OidcServer.token("cpa-admin", "outra-api", expires)).get("/admin/cursos").then().statusCode(401);
         String visitor = OidcServer.token("participante", "cpa-backend", expires);
         given().auth().oauth2(visitor).get("/admin/cursos").then().statusCode(403).contentType("application/json").body("message", notNullValue());
         given().auth().oauth2(visitor).contentType("application/json").body(Map.of("nome", "Não permitido")).post("/admin/cursos").then().statusCode(403);
+        given().auth().oauth2(visitor).contentType("application/json").body("{}").post("/admin/campanhas/cpa-2026/formularios/clonar").then().statusCode(403);
         String admin = OidcServer.token("cpa-admin", "cpa-backend", expires);
         given().auth().oauth2(admin.substring(0, admin.lastIndexOf('.') + 1) + "invalid-signature").get("/admin/cursos").then().statusCode(401);
         given().auth().oauth2(admin).get("/admin/cursos").then().statusCode(200);

@@ -6,6 +6,7 @@ import java.util.List;
 public final class AdminViews {
     private AdminViews() {}
     public record Status(Boolean ativo) {}
+    public record Clonagem(String codigo, Integer versao) {}
     public record CursoInput(String nome) {}
     public record DisciplinaInput(String nome, String professor, Long cursoId) {}
     public record Campanha(Long id, String codigo, String nome, String mensagem, String estado, boolean ativo, java.time.LocalDate dataInicio, java.time.LocalDate dataFim, boolean disponivelParaResposta) {}

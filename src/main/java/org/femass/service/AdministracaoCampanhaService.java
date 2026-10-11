@@ -98,8 +98,36 @@ public class AdministracaoCampanhaService {
         Formulario formulario = formularioParaEdicao(c, f);
         FormularioVersao origem = versaoRepository.findLatest(formulario.getId());
         if (origem == null) throw conflict("Formulário não possui versão");
+        FormularioVersao destino = copiarVersao(origem, formulario, origem.getNumero() + 1, origem.getNome());
+        formulario.getCampanha().setEstado(EstadoCampanha.RASCUNHO); versaoRepository.flush(); return destino;
+    }
+
+    @Transactional
+    public FormularioVersao clonarFormulario(String codigoDestino, AdminClonarFormularioDTO dto) {
+        if (dto == null) throw bad("Dados da clonagem são obrigatórios");
+        String codigoOrigem = texto(dto.campanhaOrigem(), "Campanha de origem", 50);
+        String formularioOrigem = texto(dto.formularioOrigem(), "Formulário de origem", 60);
+        String codigo = texto(dto.codigo(), "Código do novo formulário", 60);
+        if (dto.versaoOrigem() == null || dto.versaoOrigem() < 1) throw bad("Informe uma versão de origem válida");
+        if (codigoDestino.equals(codigoOrigem)) throw bad("Selecione uma campanha de origem diferente");
+        // Lock both campaigns in a stable order, including draft sources, to obtain a consistent snapshot.
+        for (String c : java.util.stream.Stream.of(codigoDestino, codigoOrigem).sorted().toList()) campanhaParaEdicao(c);
+        Campanha campanhaDestino = campanha(codigoDestino);
+        if (campanhaDestino.getEstado() != EstadoCampanha.RASCUNHO && campanhaDestino.getEstado() != EstadoCampanha.APROVADA)
+            throw conflict("A campanha de destino deve estar em configuração (rascunho ou aprovada)");
+        if (formularioRepository.findByCampaignAndCode(codigoDestino, codigo) != null)
+            throw conflict("Código de formulário já existe na campanha de destino");
+        FormularioVersao origem = versao(codigoOrigem, formularioOrigem, dto.versaoOrigem());
+        String nome = dto.nome() == null || dto.nome().isBlank() ? origem.getNome() : texto(dto.nome(), "Nome", 180);
+        Formulario formulario = new Formulario(); formulario.setCampanha(campanhaDestino); formulario.setCodigo(codigo);
+        formulario.setNome(nome); formulario.setPublico(origem.getPublico()); formularioRepository.persist(formulario);
+        FormularioVersao destino = copiarVersao(origem, formulario, 1, nome);
+        campanhaDestino.setEstado(EstadoCampanha.RASCUNHO); versaoRepository.flush(); return destino;
+    }
+
+    private FormularioVersao copiarVersao(FormularioVersao origem, Formulario formulario, int numero, String nome) {
         FormularioVersao destino = new FormularioVersao();
-        destino.setFormulario(formulario); destino.setNumero(origem.getNumero() + 1); destino.setNome(origem.getNome());
+        destino.setFormulario(formulario); destino.setNumero(numero); destino.setNome(nome);
         destino.setPublico(origem.getPublico()); destino.setOrdem(origem.getOrdem()); destino.setEscopo(origem.getEscopo());
         destino.setComentarioPermitido(origem.isComentarioPermitido()); destino.setAvisoComentario(origem.getAvisoComentario());
         versaoRepository.persist(destino);
@@ -111,7 +139,7 @@ public class AdministracaoCampanhaService {
                 nova.setValor(o.getValor()); nova.setNaoSeiResponder(o.isNaoSeiResponder()); nova.setOrdem(o.getOrdem()); nova.setAtivo(o.isAtivo()); opcaoRepository.persist(nova);
             }
         }
-        formulario.getCampanha().setEstado(EstadoCampanha.RASCUNHO); versaoRepository.flush(); return destino;
+        return destino;
     }
     @Transactional
     public void atualizarVersao(String c, String f, Integer numero, AdminFormularioDTO dto) {
@@ -207,7 +235,7 @@ public class AdministracaoCampanhaService {
         if (dto == null) throw bad("Dados do formulário são obrigatórios");
         texto(dto.nome, "Nome", 180); publico(dto.publico); escopo(dto.escopo); ordem(dto.ordem);
         if (dto.commentAllowed) texto(dto.commentNotice, "Aviso de comentário", 500);
-        if (dto.perguntas == null || dto.perguntas.isEmpty()) throw bad("Formulário deve ter perguntas");
+        if (dto.perguntas == null) throw bad("Lista de perguntas é obrigatória");
         Set<String> codes = new HashSet<>();
         for (AdminPerguntaDTO p : dto.perguntas) {
             if (p == null) throw bad("Pergunta inválida");

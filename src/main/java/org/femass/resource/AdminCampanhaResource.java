@@ -30,6 +30,10 @@ public class AdminCampanhaResource {
     @POST @Path("/{campaign}/formularios") public Response criarFormulario(@PathParam("campaign") String c, AdminFormularioDTO dto) {
         return Response.status(201).entity(service.criarFormulario(c, dto).getNumero()).build();
     }
+    @POST @Path("/{campaign}/formularios/clonar") public Response copiarFormulario(@PathParam("campaign") String c, AdminClonarFormularioDTO dto) {
+        var versao = service.clonarFormulario(c, dto);
+        return Response.status(201).entity(new AdminViews.Clonagem(versao.getFormulario().getCodigo(), versao.getNumero())).build();
+    }
     @PATCH @Path("/{campaign}/formularios/{form}/status") public void statusFormulario(@PathParam("campaign") String c, @PathParam("form") String f, AdminViews.Status dto) { service.statusFormulario(c, f, dto); }
     @GET @Path("/{campaign}/formularios/{form}/versoes") public List<AdminViews.Versao> versoes(@PathParam("campaign") String c, @PathParam("form") String f) { return service.versoes(c, f); }
     @POST @Path("/{campaign}/formularios/{form}/versoes") @Consumes(MediaType.WILDCARD) public Response clonar(@PathParam("campaign") String c, @PathParam("form") String f) {
