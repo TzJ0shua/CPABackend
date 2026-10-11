@@ -24,6 +24,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @QuarkusTest
 class FormularioResourceTest {
+    @jakarta.inject.Inject CampaignTestFixtures campaignFixtures;
+    @org.junit.jupiter.api.BeforeEach void scheduleFixture() { campaignFixtures.scheduleSeed(); }
+    @org.junit.jupiter.api.AfterEach void clearFixture() { campaignFixtures.clearSeed(); }
     @InjectMock
     VerificacaoEmailService verificacaoEmailService;
 

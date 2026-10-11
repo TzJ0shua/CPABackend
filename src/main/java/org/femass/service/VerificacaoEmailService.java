@@ -26,6 +26,8 @@ public class VerificacaoEmailService {
     private static final char[] PIN_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".toCharArray();
     private static final SecureRandom RANDOM = new SecureRandom();
 
+    @Inject DisponibilidadeCampanhaService disponibilidade;
+    @Inject org.femass.repository.FormularioVersaoRepository versoes;
     @Inject VerificacaoEmailRepository repository;
     @Inject EmailSender emailSender;
     @ConfigProperty(name = "verificacao-email.pin-expiracao", defaultValue = "PT2H") Duration pinExpiracao;
@@ -38,6 +40,9 @@ public class VerificacaoEmailService {
     @Transactional
     public Long solicitar(SolicitarVerificacaoEmailDTO dto) {
         DadosSolicitacao dados = validarSolicitacao(dto);
+        disponibilidade.exigirDisponivel(dados.campanha());
+        if (versoes.findPublicada(dados.campanha(), dados.formulario(), dados.publico(), dados.versao()) == null)
+            throw new IllegalArgumentException("Formulário publicado não disponível");
         String emailDigest = calcularEmailDigest(dados.email());
         LocalDateTime agora = LocalDateTime.now();
         if (repository.countSolicitacoesDesde(emailDigest, agora.minus(janelaReenvio)) >= maxReenviosJanela) {

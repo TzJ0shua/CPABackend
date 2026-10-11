@@ -12,6 +12,7 @@ import java.util.*;
 
 @ApplicationScoped
 public class AdministracaoCampanhaService {
+    @Inject DisponibilidadeCampanhaService disponibilidade;
     @Inject CampanhaRepository campanhaRepository;
     @Inject FormularioRepository formularioRepository;
     @Inject FormularioVersaoRepository versaoRepository;
@@ -23,25 +24,42 @@ public class AdministracaoCampanhaService {
     }
     public AdminViews.Campanha consultar(String codigo) { return view(campanha(codigo)); }
     public AdminViews.Campanha view(Campanha c) {
-        return new AdminViews.Campanha(c.getId(), c.getCodigo(), c.getNome(), c.getMensagemDisponibilidade(), c.getEstado().name(), c.isAtiva());
+        return new AdminViews.Campanha(c.getId(), c.getCodigo(), c.getNome(), c.getMensagemDisponibilidade(), c.getEstado().name(), c.isAtiva(), c.getDataInicio(), c.getDataFim(), disponibilidade.disponivel(c));
     }
     @Transactional
-    public Campanha criarCampanha(String codigo, String nome, String mensagem) {
+    public Campanha criarCampanha(String codigo, String nome, String mensagem, java.time.LocalDate inicio, java.time.LocalDate fim) {
         codigo = texto(codigo, "Código", 50);
         if (campanhaRepository.findByCodigo(codigo) != null) throw conflict("Código de campanha já existe");
-        Campanha c = new Campanha(); c.setCodigo(codigo); preencherCampanha(c, nome, mensagem);
+        Campanha c = new Campanha(); c.setCodigo(codigo); preencherCampanha(c, nome, mensagem, inicio, fim);
         campanhaRepository.persistAndFlush(c); return c;
     }
     @Transactional
     public void atualizarCampanha(String codigo, AdminCampanhaDTO dto) {
         if (dto == null) throw bad("Dados da campanha são obrigatórios");
         if (dto.codigo != null && !codigo.equals(dto.codigo)) throw conflict("Código da campanha não pode ser alterado");
-        preencherCampanha(campanhaParaEdicao(codigo), dto.nome, dto.mensagem);
+        bloquearAgendamento();
+        Campanha c = campanhaParaEdicao(codigo);
+        preencherCampanha(c, dto.nome, dto.mensagem, dto.dataInicio, dto.dataFim);
+        validarSobreposicao(c);
     }
-    private void preencherCampanha(Campanha c, String nome, String mensagem) {
+    private void preencherCampanha(Campanha c, String nome, String mensagem, java.time.LocalDate inicio, java.time.LocalDate fim) {
+        if (inicio == null || fim == null || inicio.isAfter(fim)) throw bad("Informe início e fim válidos para a campanha");
+        c.setDataInicio(inicio); c.setDataFim(fim);
         c.setNome(texto(nome, "Nome", 150)); c.setMensagemDisponibilidade(opcional(mensagem, "Mensagem", 500));
     }
-    @Transactional public void statusCampanha(String codigo, AdminViews.Status dto) { campanhaParaEdicao(codigo).setAtiva(ativo(dto)); }
+    @Transactional public void statusCampanha(String codigo, AdminViews.Status dto) {
+        bloquearAgendamento();
+        Campanha c = campanhaParaEdicao(codigo); c.setAtiva(ativo(dto)); validarSobreposicao(c);
+    }
+    private void bloquearAgendamento() {
+        campanhaRepository.getEntityManager().createNativeQuery("SELECT pg_advisory_xact_lock(734219610)").getSingleResult();
+    }
+    private void validarSobreposicao(Campanha c) {
+        if (!c.isAtiva() || c.getEstado() != EstadoCampanha.ABERTA || c.getDataInicio() == null || c.getDataFim() == null) return;
+        Campanha conflito = campanhaRepository.find("id <> ?1 and ativa = true and estado = 'ABERTA' and dataInicio <= ?2 and dataFim >= ?3",
+            c.getId(), c.getDataFim(), c.getDataInicio()).firstResult();
+        if (conflito != null) throw conflict("Período sobreposto à campanha " + conflito.getCodigo() + " (" + conflito.getNome() + ")");
+    }
     public List<AdminViews.Formulario> formularios(String codigo) {
         Campanha c = campanha(codigo);
         return formularioRepository.find("campanha.id = ?1 order by codigo", c.getId()).list().stream().map(this::view).toList();
@@ -148,9 +166,12 @@ public class AdministracaoCampanhaService {
         c.setEstado(EstadoCampanha.APROVADA);
     }
     @Transactional public void abrir(String codigo) {
+        bloquearAgendamento();
         Campanha c = campanhaParaEdicao(codigo);
         if (!c.isAtiva() || c.getEstado() != EstadoCampanha.APROVADA) throw conflict("Campanha ativa deve estar aprovada antes de abrir");
+        if (c.getDataInicio() == null || c.getDataFim() == null) throw bad("Configure início e fim antes de abrir a campanha");
         c.setEstado(EstadoCampanha.ABERTA);
+        validarSobreposicao(c);
     }
     @Transactional public void encerrar(String codigo) { campanhaParaEdicao(codigo).setEstado(EstadoCampanha.ENCERRADA); }
 

@@ -14,6 +14,9 @@ import static org.junit.jupiter.api.Assertions.*;
 @QuarkusTest
 @TestSecurity(user = "comissao", roles = "cpa-admin")
 class AdminCadastrosResourceTest {
+    @jakarta.inject.Inject CampaignTestFixtures campaignFixtures;
+    @org.junit.jupiter.api.BeforeEach void scheduleFixture() { campaignFixtures.scheduleSeed(); }
+    @org.junit.jupiter.api.AfterEach void clearFixture() { campaignFixtures.clearSeed(); }
     @Inject EntityManager em;
     private static String unique() { return "teste-" + UUID.randomUUID(); }
     private static String form(String questions) {
@@ -59,7 +62,7 @@ class AdminCadastrosResourceTest {
     @Test void devePreservarIdsRascunhosHistoricoEImutabilidade() {
         String campaign = unique();
         String base = "/admin/campanhas/" + campaign;
-        given().contentType("application/json").body(java.util.Map.of("codigo", campaign, "nome", "Campanha"))
+        given().contentType("application/json").body(java.util.Map.of("codigo", campaign, "nome", "Campanha", "dataInicio", java.time.LocalDate.now(org.femass.service.DisponibilidadeCampanhaService.ZONE).toString(), "dataFim", java.time.LocalDate.now(org.femass.service.DisponibilidadeCampanhaService.ZONE).toString()))
             .post("/admin/campanhas").then().statusCode(201);
         given().contentType("application/json").body(form(QUESTIONS)).post(base + "/formularios").then().statusCode(201);
         String version = base + "/formularios/geral/versoes/1";
@@ -75,6 +78,7 @@ class AdminCadastrosResourceTest {
         given().post(version + "/publicar").then().statusCode(204);
         given().contentType("application/json").body(form(QUESTIONS)).put(version).then().statusCode(409);
         given().post(base + "/aprovar").then().statusCode(204);
+        status("/admin/campanhas/cpa-2026", false);
         given().post(base + "/abrir").then().statusCode(204);
         given().get("/formularios?campaign=" + campaign + "&publico=aluno").then().statusCode(200).body("[0].questions.size()", is(1));
         given().contentType("application/json").body("""
@@ -100,7 +104,7 @@ class AdminCadastrosResourceTest {
     }
     @Test void naoDevePublicarSemPerguntasAtivasNemPersistirEdicaoInvalida() {
         String campaign = unique(); String base = "/admin/campanhas/" + campaign;
-        given().contentType("application/json").body(java.util.Map.of("codigo", campaign, "nome", "Campanha" )).post("/admin/campanhas").then().statusCode(201);
+        given().contentType("application/json").body(java.util.Map.of("codigo", campaign, "nome", "Campanha", "dataInicio", java.time.LocalDate.now(org.femass.service.DisponibilidadeCampanhaService.ZONE).toString(), "dataFim", java.time.LocalDate.now(org.femass.service.DisponibilidadeCampanhaService.ZONE).toString() )).post("/admin/campanhas").then().statusCode(201);
         given().contentType("application/json").body(form(QUESTIONS)).post(base + "/formularios").then().statusCode(201);
         String version = base + "/formularios/geral/versoes/1";
         given().contentType("application/json").body(form("""

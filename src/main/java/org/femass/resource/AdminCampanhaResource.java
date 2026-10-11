@@ -21,7 +21,7 @@ public class AdminCampanhaResource {
     @GET @Path("/{campaign}") public AdminViews.Campanha consultar(@PathParam("campaign") String c) { return service.consultar(c); }
     @POST public Response criar(AdminCampanhaDTO dto) {
         if (dto == null) throw AdministracaoCampanhaService.bad("Dados da campanha são obrigatórios");
-        return Response.status(201).entity(service.view(service.criarCampanha(dto.codigo, dto.nome, dto.mensagem))).build();
+        return Response.status(201).entity(service.view(service.criarCampanha(dto.codigo, dto.nome, dto.mensagem, dto.dataInicio, dto.dataFim))).build();
     }
     @PUT @Path("/{campaign}") public void atualizarCampanha(@PathParam("campaign") String c, AdminCampanhaDTO dto) { service.atualizarCampanha(c, dto); }
     @PATCH @Path("/{campaign}/status") public void statusCampanha(@PathParam("campaign") String c, AdminViews.Status dto) { service.statusCampanha(c, dto); }

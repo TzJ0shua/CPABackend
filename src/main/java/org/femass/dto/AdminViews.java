@@ -8,7 +8,7 @@ public final class AdminViews {
     public record Status(Boolean ativo) {}
     public record CursoInput(String nome) {}
     public record DisciplinaInput(String nome, String professor, Long cursoId) {}
-    public record Campanha(Long id, String codigo, String nome, String mensagem, String estado, boolean ativo) {}
+    public record Campanha(Long id, String codigo, String nome, String mensagem, String estado, boolean ativo, java.time.LocalDate dataInicio, java.time.LocalDate dataFim, boolean disponivelParaResposta) {}
     public record Curso(Long id, String nome, boolean ativo) {}
     public record Disciplina(Long id, String nome, String professor, Long cursoId, String cursoNome, boolean ativo, boolean cursoAtivo) {}
     public record Formulario(Long id, String codigo, String nome, String publico, boolean ativo) {}

@@ -18,6 +18,9 @@ import static org.hamcrest.Matchers.*;
 
 @QuarkusTest
 class FormularioVersionadoResourceTest {
+    @jakarta.inject.Inject CampaignTestFixtures campaignFixtures;
+    @org.junit.jupiter.api.BeforeEach void scheduleFixture() { campaignFixtures.scheduleSeed(); }
+    @org.junit.jupiter.api.AfterEach void clearFixture() { campaignFixtures.clearSeed(); }
 
     @InjectMock
     VerificacaoEmailService verificacaoEmailService;

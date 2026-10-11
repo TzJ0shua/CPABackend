@@ -19,6 +19,9 @@ import static org.mockito.Mockito.verify;
 
 @QuarkusTest
 class VerificacaoEmailResourceTest {
+    @jakarta.inject.Inject CampaignTestFixtures campaignFixtures;
+    @org.junit.jupiter.api.BeforeEach void scheduleFixture() { campaignFixtures.scheduleSeed(); }
+    @org.junit.jupiter.api.AfterEach void clearFixture() { campaignFixtures.clearSeed(); }
     @InjectMock
     EmailSender emailSender;
 

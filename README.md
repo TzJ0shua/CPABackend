@@ -585,3 +585,11 @@ verifica assinatura, expiração, audiência e papéis. Não utiliza o Keycloak 
 Execute os testes contra um banco PostgreSQL descartável, definindo
 `QUARKUS_DATASOURCE_JDBC_URL`, `QUARKUS_DATASOURCE_USERNAME` e
 `QUARKUS_DATASOURCE_PASSWORD`, e use Java 21 com `./mvnw test`.
+
+## Período das campanhas
+
+A migração V14 preserva campanhas existentes sem datas. Após atualizar, configure `dataInicio` e `dataFim` no painel; sem elas a pesquisa fica indisponível. Novos cadastros e edições exigem ambas as datas no formato `YYYY-MM-DD`. Os limites são inclusivos no fuso `America/Sao_Paulo`. A campanha precisa estar ativa e `ABERTA`; a abertura manual pode ocorrer antes do início. O fim do período bloqueia respostas sem modificar seu estado ou o histórico.
+
+`GET /campanhas/atual/disponibilidade` seleciona a campanha vigente. Sem campanha, retorna HTTP 200 com `campanha`, `estado`, `dataInicio`, `dataFim` nulos e `disponivelParaResposta: false`. A consulta por código também valida o período. O catálogo oculta campanhas fora do período; envios indisponíveis retornam 409 em JSON antes de consumir autorizações ou persistir respostas.
+
+Abertura, reativação e edição impedem sobreposição entre campanhas ativas e abertas, inclusive futuras, com HTTP 409 identificando o conflito. Um bloqueio transacional consultivo PostgreSQL serializa essas operações. Rascunhos e campanhas inativas podem ter períodos sobrepostos.

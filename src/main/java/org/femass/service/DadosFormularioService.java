@@ -44,9 +44,11 @@ public class DadosFormularioService {
     }
 
     public DadosFormularioDTO buscarDadosFormulario(String campanha, org.femass.entity.PublicoAvaliacao publico) {
+        var catalogo = catalogoService.buscar(campanha, publico);
+        if (catalogo.isEmpty()) return new DadosFormularioDTO(List.of(), catalogo, true);
         Map<Long, CursoFormularioDTO> cursos = buscarCursos();
         preencherDisciplinas(cursos);
-        return new DadosFormularioDTO(List.copyOf(cursos.values()), catalogoService.buscar(campanha, publico), true);
+        return new DadosFormularioDTO(List.copyOf(cursos.values()), catalogo, true);
     }
 
     private Map<Long, CursoFormularioDTO> buscarCursos() {

@@ -26,6 +26,8 @@ public class VerificacaoEmailResource {
             Long id = service.solicitar(dto);
             return Response.accepted(new SolicitarVerificacaoEmailResponseDTO(id,
                     "Se o endereco informado for elegivel, um codigo sera enviado")).build();
+        } catch (org.femass.service.CampanhaIndisponivelException e) {
+            return Response.status(409).entity(new ErrorResponseDTO(e.getMessage())).build();
         } catch (IllegalArgumentException e) {
             return Response.status(Response.Status.BAD_REQUEST).entity(new ErrorResponseDTO(e.getMessage())).build();
         } catch (IllegalStateException e) {

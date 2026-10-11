@@ -32,6 +32,8 @@ public class FormularioResource {
             String digest = validacao.getCodigoDigest();
             return Response.ok(new QRCodeResponseDTO(validacao.getCodigoValidacao(), validacao.getCodigoValidacao(),
                 digest.substring(digest.length() - 10))).build();
+        } catch (org.femass.service.CampanhaIndisponivelException e) {
+            return Response.status(409).entity(new ErrorResponseDTO(e.getMessage())).build();
         } catch (IllegalArgumentException | InvalidFormularioException e) {
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(new ErrorResponseDTO(e.getMessage()))

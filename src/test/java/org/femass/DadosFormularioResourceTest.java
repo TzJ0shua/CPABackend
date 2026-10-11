@@ -8,6 +8,9 @@ import static org.hamcrest.Matchers.*;
 
 @QuarkusTest
 class DadosFormularioResourceTest {
+    @jakarta.inject.Inject CampaignTestFixtures campaignFixtures;
+    @org.junit.jupiter.api.BeforeEach void scheduleFixture() { campaignFixtures.scheduleSeed(); }
+    @org.junit.jupiter.api.AfterEach void clearFixture() { campaignFixtures.clearSeed(); }
     @Test
     void deveExigirContextoDoCatalogo() {
         given().when().get("/dados-formulario").then().statusCode(400);

@@ -38,6 +38,7 @@ public class FormularioService {
     @Inject
     DisciplinaRepository disciplinaRepository;
 
+    @Inject DisponibilidadeCampanhaService disponibilidade;
     @Inject FormularioVersaoRepository formularioVersaoRepository;
     @Inject PerguntaVersaoRepository perguntaVersaoRepository;
     @Inject OpcaoPerguntaRepository opcaoPerguntaRepository;
@@ -75,6 +76,7 @@ public class FormularioService {
 
     private void salvarFormulario(FormularioDTO formularioDTO) {
         validarFormulario(formularioDTO);
+        disponibilidade.exigirDisponivel(formularioDTO.campaign);
         PublicoAvaliacao publico = PublicoAvaliacao.from(formularioDTO.respondent.type);
         verificacaoEmailService.consumirAutorizacaoParaEnvio(
                 formularioDTO.respondent.emailVerificationToken,

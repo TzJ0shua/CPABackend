@@ -14,7 +14,7 @@ class AdminCampanhaResourceTest {
     void devePermitirAdministracaoComPapelDaComissao() {
         String codigo = "teste-admin-" + System.nanoTime();
         given().contentType("application/json").body("""
-                {"codigo":"%s","nome":"Campanha de teste"}
+                {"codigo":"%s","nome":"Campanha de teste","dataInicio":"2026-10-01","dataFim":"2026-10-31"}
                 """.formatted(codigo)).when().post("/admin/campanhas")
                 .then().statusCode(201).body("estado", equalTo("RASCUNHO"));
     }
