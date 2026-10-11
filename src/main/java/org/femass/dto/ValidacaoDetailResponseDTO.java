@@ -3,6 +3,9 @@ package org.femass.dto;
 import java.time.LocalDateTime;
 
 public class ValidacaoDetailResponseDTO {
+    private ResumoValidacaoDTO resumo;
+    public ResumoValidacaoDTO getResumo() { return resumo; }
+    public void setResumo(ResumoValidacaoDTO value) { resumo = value; }
 	private Boolean codigoValido;
 	private String id;
 	private String codigoValidacao;

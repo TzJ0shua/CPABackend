@@ -24,9 +24,21 @@ docker compose up --build
 O backend estará disponível em `http://localhost:8080`
 O PostgreSQL estará em `localhost:5433`
 
+## Identificação de alunos e comprovantes
+
+A migração `V15__add_student_identity_and_validation_links.sql` adiciona `cpf_hash`, `matricula_hash` e `formulario_versao_id` em `VALIDACAO`, além de `AVALIACAO.validacao_id`. Respostas pertencem à avaliação; esse vínculo permite identificar todas as disciplinas e respostas de um comprovante. Registros anteriores permanecem sem esses vínculos, pois não há identificação suficiente para preenchê-los retroativamente.
+
+`POST /formulario` exige `respondent.cpf` válido (11 dígitos, com ou sem máscara) e `respondent.matricula` com exatamente 10 dígitos para alunos. CPF e matrícula são normalizados e armazenados somente como HMAC-SHA-256, com separação por tipo e campanha. As restrições únicas por versão e hash impedem repetição pelo CPF **ou** pela matrícula, inclusive em requisições simultâneas. Outra versão do mesmo formulário, outro formulário e outra campanha são permitidos. Todas as disciplinas desejadas devem ser enviadas juntas; erros de validação não gravam uma participação parcial.
+
+Configure `VALIDACAO_ALUNO_HASH_SEED` no `.env` antes de aceitar alunos e recrie o backend. Gere um segredo aleatório de pelo menos 32 bytes, conserve-o entre reinicializações e proteja seu backup. Alterar a seed produz hashes diferentes e compromete a detecção das participações anteriores. Configuração ausente ou curta retorna `503` com `code: IDENTIFICACAO_INDISPONIVEL`; participação repetida retorna `409` com `code: FORMULARIO_JA_RESPONDIDO`. Docentes e funcionários mantêm a autorização por email ou chave mestra.
+
+Leitura simples, leitura detalhada e histórico em `/validacao` incluem `resumo`: `validacaoId`, campanha (código/nome), formulário (código/nome/versão/público/escopo) e avaliações (ID, curso, disciplina/professor e `respostaIds`). O resumo permanece consultável após desativação dos cadastros e não contém CPF, matrícula, hashes pessoais, notas, opções ou comentários. Comprovantes antigos ou avulsos podem não ter contexto de formulário.
+
 ## Configuração por `.env`
 
 Para Docker Compose, crie `.env` na raiz. Ele é ignorado pelo Git. Os valores abaixo são exemplos locais; substitua todos os placeholders e nunca versione credenciais reais.
+
+O arquivo [`.env.example`](.env.example) reúne as variáveis do backend, uma referência do frontend e alternativas para os domínios de teste. Copie-o para `.env` e ajuste os valores. Ele usa as portas externas `5435`, `8081` e `5175`; o nome do banco permanece `cpa-femass` para corresponder ao healthcheck atual. As opções antigas e específicas de outras formas de execução estão comentadas. Para o frontend, copie somente seu próprio `.env.example`, sem segredos. As URLs e portas do bloco abaixo são uma alternativa local às do arquivo.
 
 ```env
 # Infraestrutura local
@@ -54,6 +66,8 @@ QUARKUS_DATASOURCE_USERNAME=postgres
 
 # Códigos de validação e PIN
 VALIDACAO_CODIGO_EXPIRACAO=PT336H
+# Segredo estável e aleatório, com pelo menos 32 bytes; não use este placeholder.
+VALIDACAO_ALUNO_HASH_SEED=substitua-por-um-segredo-aleatorio-com-32-bytes-ou-mais
 VERIFICACAO_EMAIL_PIN_EXPIRACAO=PT2H
 VERIFICACAO_EMAIL_AUTORIZACAO_EXPIRACAO=PT15M
 VERIFICACAO_EMAIL_MAX_TENTATIVAS=5
@@ -122,6 +136,7 @@ O Compose também define `KC_HEALTH_ENABLED=true` e `KC_HOSTNAME_BACKCHANNEL_DYN
 | Variável | Finalidade | Padrão |
 | --- | --- | --- |
 | `VALIDACAO_CODIGO_EXPIRACAO` | Validade dos códigos de comprovação de participação. | `PT336H` (14 dias). |
+| `VALIDACAO_ALUNO_HASH_SEED` | Chave secreta do HMAC-SHA-256 usado para CPF e matrícula dos alunos. | Obrigatória para envios de alunos; mínimo de 32 bytes UTF-8, sem padrão. Nunca use `VITE_`. |
 | `VERIFICACAO_EMAIL_PIN_EXPIRACAO` | Validade do PIN enviado por e-mail. | `PT2H`. |
 | `VERIFICACAO_EMAIL_AUTORIZACAO_EXPIRACAO` | Validade da autorização de envio após confirmar o PIN. | `PT15M`. |
 | `VERIFICACAO_EMAIL_MAX_TENTATIVAS` | Limite de tentativas de confirmação do PIN. | `5`. |

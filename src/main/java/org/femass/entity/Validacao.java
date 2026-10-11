@@ -10,6 +10,19 @@ import java.util.UUID;
 @Entity
 @Table(name = "VALIDACAO")
 public class Validacao extends PanacheEntityBase {
+    @Column(name = "cpf_hash", length = 64)
+    private String cpfHash;
+    @Column(name = "matricula_hash", length = 64)
+    private String matriculaHash;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "formulario_versao_id")
+    private FormularioVersao formularioVersao;
+    public String getCpfHash() { return cpfHash; }
+    public void setCpfHash(String value) { cpfHash = value; }
+    public String getMatriculaHash() { return matriculaHash; }
+    public void setMatriculaHash(String value) { matriculaHash = value; }
+    public FormularioVersao getFormularioVersao() { return formularioVersao; }
+    public void setFormularioVersao(FormularioVersao value) { formularioVersao = value; }
     @Transient
     private String codigoValidacao;
 

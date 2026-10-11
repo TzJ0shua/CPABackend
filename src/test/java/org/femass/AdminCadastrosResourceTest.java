@@ -37,10 +37,10 @@ class AdminCadastrosResourceTest {
             .post("/admin/disciplinas").then().statusCode(201).extract().jsonPath().getLong("id");
         String submission = """
             {"campaign":"cpa-2026","form":"discente_disciplinas","formVersion":1,
-             "respondent":{"type":"aluno","aceiteTermosCondicoesServico":true},"course":{"name":"%s"},
+             "respondent":{"type":"aluno","aceiteTermosCondicoesServico":true,"cpf":"52998224725","matricula":"0000000001"},"course":{"name":"%s"},
              "subjects":[{"subjectId":"%d","answers":[{"questionId":"q1","optionCode":"concordo_totalmente"}]}]}
             """.formatted(nome, disciplina);
-        given().contentType("application/json").body(submission).post("/formulario").then().statusCode(200);
+        given().contentType("application/json").body(submission.replace("52998224725", "39053344705").replace("0000000001", "0000000003")).post("/formulario").then().statusCode(200);
         given().contentType("application/json").body(java.util.Map.of("nome", nome)).post("/admin/cursos").then().statusCode(409).body("message", notNullValue());
         status("/admin/cursos/" + curso, false);
         given().contentType("application/json").body(submission).post("/formulario").then().statusCode(400);
@@ -82,14 +82,14 @@ class AdminCadastrosResourceTest {
         given().post(base + "/abrir").then().statusCode(204);
         given().get("/formularios?campaign=" + campaign + "&publico=aluno").then().statusCode(200).body("[0].questions.size()", is(1));
         given().contentType("application/json").body("""
-            {"campaign":"%s","form":"geral","formVersion":1,"respondent":{"type":"aluno","aceiteTermosCondicoesServico":true},"answers":[{"questionId":"q1","optionCode":"sim"}]}
+            {"campaign":"%s","form":"geral","formVersion":1,"respondent":{"type":"aluno","aceiteTermosCondicoesServico":true,"cpf":"52998224725","matricula":"0000000001"},"answers":[{"questionId":"q1","optionCode":"sim"}]}
             """.formatted(campaign)).post("/formulario").then().statusCode(200);
         long answers = em.createQuery("select count(r) from Resposta r where r.perguntaVersao.id = :id", Long.class).setParameter("id", questionId).getSingleResult();
         assertEquals(1, answers);
         status(version, false);
         given().get("/formularios?campaign=" + campaign + "&publico=aluno").then().statusCode(200).body("size()", is(0));
         given().contentType("application/json").body("""
-            {"campaign":"%s","form":"geral","formVersion":1,"respondent":{"type":"aluno","aceiteTermosCondicoesServico":true},"answers":[{"questionId":"q1","optionCode":"sim"}]}
+            {"campaign":"%s","form":"geral","formVersion":1,"respondent":{"type":"aluno","aceiteTermosCondicoesServico":true,"cpf":"52998224725","matricula":"0000000001"},"answers":[{"questionId":"q1","optionCode":"sim"}]}
             """.formatted(campaign)).post("/formulario").then().statusCode(400);
         assertEquals(answers, em.createQuery("select count(r) from Resposta r where r.perguntaVersao.id = :id", Long.class).setParameter("id", questionId).getSingleResult());
         status(base, false); status(version, true);

@@ -11,6 +11,11 @@ import java.util.UUID;
 @ApplicationScoped
 public class ValidacaoRepository implements PanacheRepositoryBase<Validacao, Long> {
 
+    public boolean existsByStudentIdentity(Long versionId, String cpfHash, String matriculaHash) {
+        return count("formularioVersao.id = ?1 and (cpfHash = ?2 or matriculaHash = ?3)",
+                versionId, cpfHash, matriculaHash) > 0;
+    }
+
     public Validacao findByCodigoDigest(UUID digest) {
         return find("newHash", digest).firstResult();
     }

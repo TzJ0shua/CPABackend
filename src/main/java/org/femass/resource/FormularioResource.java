@@ -32,6 +32,10 @@ public class FormularioResource {
             String digest = validacao.getCodigoDigest();
             return Response.ok(new QRCodeResponseDTO(validacao.getCodigoValidacao(), validacao.getCodigoValidacao(),
                 digest.substring(digest.length() - 10))).build();
+        } catch (org.femass.service.FormularioJaRespondidoException e) {
+            return duplicidade();
+        } catch (org.femass.service.IdentificacaoIndisponivelException e) {
+            return Response.status(503).entity(new ErrorResponseDTO(e.getMessage(), "IDENTIFICACAO_INDISPONIVEL")).build();
         } catch (org.femass.service.CampanhaIndisponivelException e) {
             return Response.status(409).entity(new ErrorResponseDTO(e.getMessage())).build();
         } catch (IllegalArgumentException | InvalidFormularioException e) {
@@ -39,14 +43,21 @@ public class FormularioResource {
                     .entity(new ErrorResponseDTO(e.getMessage()))
                     .build();
         } catch (PersistenceException e) {
+            if (org.femass.service.FormularioJaRespondidoException.causadaPorUnicidade(e)) return duplicidade();
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
                     .entity(new ErrorResponseDTO("Erro ao salvar formulario no banco de dados"))
                     .build();
         } catch (Exception e) {
+            if (org.femass.service.FormularioJaRespondidoException.causadaPorUnicidade(e)) return duplicidade();
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
                     .entity(new ErrorResponseDTO("Erro inesperado ao processar formulario"))
                     .build();
         }
+    }
+
+    private Response duplicidade() {
+        return Response.status(409).entity(new ErrorResponseDTO("Você já respondeu esta versão do formulário nesta campanha.",
+            "FORMULARIO_JA_RESPONDIDO")).build();
     }
 
 }

@@ -67,7 +67,7 @@ class FormularioResourceTest {
         String formulario = """
                 {
                   "campaign":"cpa-2026", "form":"discente_disciplinas", "formVersion":1,
-                  "respondent":{"type":"aluno","aceiteTermosCondicoesServico":true},
+                  "respondent":{"type":"aluno","aceiteTermosCondicoesServico":true,"cpf":"11144477735","matricula":"0000000002"},
                   "course":{"name":"%s"},
                   "subjects":[{"subjectId":"%d","answers":[{"questionId":"q1","optionCode":"concordo_totalmente"}]}]
                 }
@@ -103,7 +103,7 @@ class FormularioResourceTest {
     }
 
     @Test
-    void deveDescartarIdentificadoresLegadosDoAluno() {
+    void deveRejeitarMatriculaInvalida() {
         given().contentType("application/json").body("""
                 {
                   "campaign":"cpa-2026", "form":"discente_gestao", "formVersion":1,
@@ -116,6 +116,6 @@ class FormularioResourceTest {
                   },
                   "answers":[{"questionId":"q1","optionCode":"concordo_totalmente"}]
                 }
-                """).when().post("/formulario").then().statusCode(200);
+                """).when().post("/formulario").then().statusCode(400);
     }
 }

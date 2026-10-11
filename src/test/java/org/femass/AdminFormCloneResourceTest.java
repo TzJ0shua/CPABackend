@@ -47,7 +47,7 @@ class AdminFormCloneResourceTest {
         given().post(sourceBase + "/aprovar").then().statusCode(204);
         given().post(sourceBase + "/abrir").then().statusCode(204);
         given().contentType("application/json").body("""
-            {"campaign":"%s","form":"geral","formVersion":1,"respondent":{"type":"aluno","aceiteTermosCondicoesServico":true},"answers":[{"questionId":"q1","optionCode":"sim"}]}
+            {"campaign":"%s","form":"geral","formVersion":1,"respondent":{"type":"aluno","aceiteTermosCondicoesServico":true,"cpf":"52998224725","matricula":"0000000001"},"answers":[{"questionId":"q1","optionCode":"sim"}]}
             """.formatted(source)).post("/formulario").then().statusCode(200);
         // A newer draft exists, but the request explicitly selects published version 1.
         given().post(sourceBase + "/formularios/geral/versoes").then().statusCode(201);

@@ -63,6 +63,7 @@ class ValidacaoDigestResourceTest {
     private ValidacaoResource resource() {
         var resource = new ValidacaoResource();
         resource.service = mock(ValidacaoService.class);
+        resource.resumos = mock(org.femass.service.ResumoValidacaoService.class);
         return resource;
     }
 
