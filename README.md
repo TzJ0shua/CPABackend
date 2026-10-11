@@ -44,6 +44,7 @@ KEYCLOAK_ADMIN_PASSWORD=troque-admin-keycloak
 KEYCLOAK_CPA_ADMIN_PASSWORD=troque-admin-cpa
 KEYCLOAK_PORT=8180
 KEYCLOAK_PUBLIC_URL=http://localhost:8180
+KEYCLOAK_FRONTEND_URL=http://localhost:5173
 KEYCLOAK_AUTH_SERVER_URL=http://keycloak:8080/realms/cpa
 KEYCLOAK_CLIENT_ID=cpa-backend
 
@@ -60,7 +61,7 @@ VERIFICACAO_EMAIL_MAX_REENVIOS_JANELA=3
 VERIFICACAO_EMAIL_JANELA_REENVIO=PT1H
 VERIFICACAO_EMAIL_DIGEST_SECRET=gere-um-segredo-longo-e-aleatorio
 
-# Gmail API — mantenha false até configurar todas as cinco variáveis seguintes.
+# Gmail API — habilite após configurar OAuth, remetente e segredo de digest.
 VERIFICACAO_EMAIL_GMAIL_ENABLED=false
 VERIFICACAO_EMAIL_GMAIL_CLIENT_ID=seu-client-id.apps.googleusercontent.com
 VERIFICACAO_EMAIL_GMAIL_CLIENT_SECRET=seu-client-secret
@@ -68,9 +69,109 @@ VERIFICACAO_EMAIL_GMAIL_REFRESH_TOKEN=seu-refresh-token
 VERIFICACAO_EMAIL_GMAIL_FROM=remetente@example.com
 VERIFICACAO_EMAIL_GMAIL_CONNECT_TIMEOUT=PT10S
 VERIFICACAO_EMAIL_GMAIL_REQUEST_TIMEOUT=PT15S
+
+# Frontend: copie esta parte também para o .env do CPAFrontend.
+# São configurações públicas, incorporadas ao bundle durante o build.
+VITE_API_BASE_URL=http://localhost:8080
+VITE_KEYCLOAK_URL=http://localhost:8180
+VITE_KEYCLOAK_REALM=cpa
+VITE_KEYCLOAK_CLIENT_ID=cpa-frontend
+VITE_CPA_CAMPAIGN_UNAVAILABLE_MESSAGE=A pesquisa está indisponível no momento. Tente novamente mais tarde.
+
+# Opcional, exportar no terminal ao executar os testes do frontend.
+PLAYWRIGHT_CHANNEL=msedge
 ```
 
-As durações usam o formato ISO-8601 (`PT15M`, `PT2H`, `PT336H`). O Compose encaminha todas essas variáveis ao serviço correspondente.
+As durações usam o formato ISO-8601 (`PT15M`, `PT2H`, `PT336H`). Cada repositório tem seu próprio `.env` e Compose: as variáveis do frontend acima não são encaminhadas pelo Compose do backend. O `.env` fornece valores para a interpolação do Compose; somente as chaves declaradas em `environment` chegam aos contêineres.
+
+### Referência completa: infraestrutura e autenticação
+
+| Variável | Destino / finalidade | Padrão / observação |
+| --- | --- | --- |
+| `POSTGRES_DB` | Nome do banco inicializado pelo serviço PostgreSQL. | `cpa-femass`. |
+| `POSTGRES_USER` | Usuário inicializado pelo PostgreSQL. | `postgres`. |
+| `QUARKUS_DATASOURCE_PASSWORD_VARIABLE` | Entrada do Compose para a senha do PostgreSQL e do backend. | Defina uma senha própria; chega como `POSTGRES_PASSWORD` e `QUARKUS_DATASOURCE_PASSWORD`. |
+| `POSTGRES_PORT` | Porta publicada do PostgreSQL no host. | `5433`; a porta interna continua `5432`. |
+| `BACKEND_PORT` | Porta publicada da API no host. | `8080`; a porta interna continua `8080`. |
+| `FRONTEND_PORT` | Porta publicada pelo Compose do CPAFrontend. | `5173`; não é utilizada pelo Compose deste backend. |
+| `QUARKUS_DATASOURCE_JDBC_URL` | URL JDBC usada pela aplicação. | Compose: `jdbc:postgresql://postgres:5432/cpa-femass`; fora do Docker: `jdbc:postgresql://localhost:5433/cpa-femass`. |
+| `QUARKUS_DATASOURCE_USERNAME` | Usuário usado pela aplicação para acessar o banco. | `postgres`; deve corresponder ao usuário do banco. |
+| `QUARKUS_DATASOURCE_PASSWORD` | Senha usada diretamente pelo processo Java. | No Compose é preenchida por `QUARKUS_DATASOURCE_PASSWORD_VARIABLE`; fora do Docker, exporte esta chave diretamente. |
+| `POSTGRES_PASSWORD` | Senha recebida pelo contêiner PostgreSQL. | No Compose é preenchida por `QUARKUS_DATASOURCE_PASSWORD_VARIABLE`; não é uma entrada independente desse Compose. |
+| `QUARKUS_HTTP_CORS_ORIGINS_VARIABLE` | Entrada do Compose para as origens permitidas da API. | `http://localhost:5173`; mapeada para `QUARKUS_HTTP_CORS_ORIGINS`. |
+| `QUARKUS_HTTP_CORS_ORIGINS` | Origens permitidas pelo processo Java. | `http://localhost:5173`; use a origem pública exata do frontend, com protocolo e porta. Para várias origens, separe por vírgulas. |
+| `KEYCLOAK_ADMIN_USERNAME` | Administrador inicial do console Keycloak. | `admin`; mapeada para `KC_BOOTSTRAP_ADMIN_USERNAME`. |
+| `KEYCLOAK_ADMIN_PASSWORD` | Senha inicial do administrador do console. | Configure uma senha própria; mapeada para `KC_BOOTSTRAP_ADMIN_PASSWORD`. |
+| `KEYCLOAK_CPA_ADMIN_PASSWORD` | Senha inicial do usuário da aplicação `cpa-admin` no realm importado. | Configure uma senha própria. Não é a senha do administrador do console. |
+| `KEYCLOAK_PORT` | Porta publicada do Keycloak no host. | `8180`; porta interna `8080`. |
+| `KEYCLOAK_PUBLIC_URL` | Endereço público do Keycloak, acessível pelo navegador. | `http://localhost:8180`; mapeada para `KC_HOSTNAME`. |
+| `KEYCLOAK_FRONTEND_URL` | Origem pública do frontend para redirecionamentos, logout e origens do cliente `cpa-frontend`. | `http://localhost:5173`, sem barra final; usada na importação do realm. |
+| `KEYCLOAK_AUTH_SERVER_URL` | Endpoint do realm que a API usa para OIDC. | Compose: `http://keycloak:8080/realms/cpa`; fora dele, use uma URL acessível pelo processo Java. Inclua `/realms/cpa`. |
+| `KEYCLOAK_CLIENT_ID` | Cliente / audiência esperada pela API no access token. | `cpa-backend`; deve corresponder ao mapper de audiência do frontend. |
+| `QUARKUS_OIDC_AUTH_SERVER_URL` | Alternativa nativa do Quarkus para sobrescrever `quarkus.oidc.auth-server-url`. | Opcional; se passada ao processo Java, prevalece sobre o valor de `KEYCLOAK_AUTH_SERVER_URL` referenciado no arquivo de propriedades. Não é encaminhada pelo Compose atual. |
+
+Se mudar `POSTGRES_DB` ou `POSTGRES_USER`, ajuste também a URL JDBC, o usuário da aplicação e o healthcheck do PostgreSQL, que atualmente usa `cpa-femass` e `postgres` fixos. Dentro do Compose, use o nome do serviço `postgres` e a porta interna; fora dele, use o endereço e a porta publicados. Mudar credenciais no `.env` não modifica automaticamente usuários de um banco já inicializado.
+
+Para executar o backend fora do Docker, exporte `QUARKUS_DATASOURCE_JDBC_URL`, `QUARKUS_DATASOURCE_USERNAME`, `QUARKUS_DATASOURCE_PASSWORD`, `QUARKUS_HTTP_CORS_ORIGINS` e as demais configurações necessárias no ambiente do processo. Os aliases com sufixo `_VARIABLE` são exclusivos do Compose. Para usar `QUARKUS_OIDC_AUTH_SERVER_URL` em um contêiner, adicione-a explicitamente ao `environment` ou passe-a ao iniciar o contêiner; apenas inseri-la no `.env` não basta.
+
+O Compose também define `KC_HEALTH_ENABLED=true` e `KC_HOSTNAME_BACKCHANNEL_DYNAMIC=true`. As chaves `KC_BOOTSTRAP_ADMIN_USERNAME`, `KC_BOOTSTRAP_ADMIN_PASSWORD` e `KC_HOSTNAME` são preenchidas pelos aliases acima; declará-las apenas no `.env` não substitui esse mapeamento. Alterações de `KEYCLOAK_FRONTEND_URL` ou da senha inicial não atualizam um realm que já existe: configure o cliente ou a conta no Keycloak conforme a seção de painel administrativo.
+
+### Referência completa: validação e e-mail
+
+| Variável | Finalidade | Padrão |
+| --- | --- | --- |
+| `VALIDACAO_CODIGO_EXPIRACAO` | Validade dos códigos de comprovação de participação. | `PT336H` (14 dias). |
+| `VERIFICACAO_EMAIL_PIN_EXPIRACAO` | Validade do PIN enviado por e-mail. | `PT2H`. |
+| `VERIFICACAO_EMAIL_AUTORIZACAO_EXPIRACAO` | Validade da autorização de envio após confirmar o PIN. | `PT15M`. |
+| `VERIFICACAO_EMAIL_MAX_TENTATIVAS` | Limite de tentativas de confirmação do PIN. | `5`. |
+| `VERIFICACAO_EMAIL_MAX_REENVIOS_JANELA` | Limite de solicitações na janela de reenvio. | `3`. |
+| `VERIFICACAO_EMAIL_JANELA_REENVIO` | Duração da janela de limitação de reenvios. | `PT1H`. |
+| `VERIFICACAO_EMAIL_DIGEST_SECRET` | Segredo usado para calcular o digest dos endereços de e-mail. | Configure um segredo longo e aleatório; não utilize os fallbacks locais em produção. |
+| `VERIFICACAO_EMAIL_GMAIL_ENABLED` | Habilita envio real pela Gmail API. | `false`. |
+| `VERIFICACAO_EMAIL_GMAIL_CLIENT_ID` | Client ID OAuth2 do Google. | `not-configured`; obrigatório para envio real. |
+| `VERIFICACAO_EMAIL_GMAIL_CLIENT_SECRET` | Client secret OAuth2 do Google. | `not-configured`; obrigatório para envio real. |
+| `VERIFICACAO_EMAIL_GMAIL_REFRESH_TOKEN` | Refresh token da conta remetente. | `not-configured`; obrigatório para envio real. |
+| `VERIFICACAO_EMAIL_GMAIL_FROM` | Endereço da conta remetente autorizada. | `not-configured`; obrigatório para envio real. |
+| `VERIFICACAO_EMAIL_GMAIL_CONNECT_TIMEOUT` | Timeout de conexão HTTP da integração Gmail. | `PT10S`. |
+| `VERIFICACAO_EMAIL_GMAIL_REQUEST_TIMEOUT` | Timeout de cada requisição HTTP da integração Gmail. | `PT15S`. |
+
+### Referência do frontend
+
+| Variável | Finalidade | Padrão / observação |
+| --- | --- | --- |
+| `VITE_API_BASE_URL` | URL pública da API acessível pelo navegador. | Compose do frontend: `http://localhost:8080`; não use `http://backend:8080`. |
+| `VITE_KEYCLOAK_URL` | URL pública do Keycloak, sem `/realms/cpa`. | Compose do frontend: `http://localhost:8180`. |
+| `VITE_KEYCLOAK_REALM` | Realm do login administrativo. | Docker: `cpa`; configure ao executar o Vite. |
+| `VITE_KEYCLOAK_CLIENT_ID` | Cliente público OIDC do frontend. | `cpa-frontend`. |
+| `VITE_CPA_CAMPAIGN_UNAVAILABLE_MESSAGE` | Mensagem de indisponibilidade quando a API não informar uma. | `A pesquisa está indisponível no momento. Tente novamente mais tarde.` |
+| `PLAYWRIGHT_CHANNEL` | Navegador dos testes E2E do frontend. | `msedge`; exporte no terminal, por exemplo `chrome` se instalado. |
+
+As variáveis `VITE_` são públicas e lidas durante o build, não pelo Nginx em execução. Reconstrua o frontend após alterá-las. O Dockerfile do frontend recebe argumentos para a URL da API e as três configurações Keycloak; a mensagem personalizada é lida do `.env` / `.env.production` no contexto de build. Veja o README do CPAFrontend para os detalhes. Se mudar a origem do frontend, ajuste CORS e `KEYCLOAK_FRONTEND_URL`.
+
+### Variáveis presentes em configurações antigas
+
+| Variável | Situação atual |
+| --- | --- |
+| `VITE_CPA_CAMPAIGN` | Não é mais consumida. A campanha é selecionada automaticamente por `/campanhas/atual/disponibilidade`, considerando ativação, estado e período. Pode ser removida. |
+| `KEYCLOAK_DB_PASSWORD` | Não é consumida pelo Compose atual. O Keycloak usa `start-dev`, sem banco externo configurado; esta chave não muda sua senha nem o banco da aplicação. Um banco externo exige configuração explícita do serviço Keycloak. |
+
+### Variáveis das imagens Java alternativas
+
+O Compose usa o **Dockerfile da raiz**, com `java -jar` em uma imagem Temurin. Os modelos `src/main/docker/Dockerfile.jvm` e `Dockerfile.legacy-jar` usam `run-java.sh` e documentam as opções abaixo; elas só se aplicam ao construir e executar essas imagens alternativas, não ao Compose atual.
+
+| Variáveis | Uso nas imagens alternativas |
+| --- | --- |
+| `JAVA_OPTS`, `JAVA_OPTS_APPEND` | Substituir ou acrescentar opções da JVM; os modelos já definem host HTTP e gerenciador de logging em `JAVA_OPTS_APPEND`. |
+| `JAVA_APP_JAR` | Caminho do JAR executado; definido pelos modelos como `/deployments/quarkus-run.jar`. |
+| `LANGUAGE` | Idioma definido pelos modelos: `en_US:en`. |
+| `JAVA_MAX_MEM_RATIO`, `JAVA_INITIAL_MEM_RATIO`, `JAVA_MAX_INITIAL_MEM` | Dimensionamento de heap a partir da memória do contêiner; padrões descritos nos modelos: `50`, `25` e `4096` MB, respectivamente. |
+| `JAVA_DIAGNOSTICS`, `JAVA_DEBUG`, `JAVA_DEBUG_PORT` | Diagnósticos e depuração remota; desabilitados por padrão, porta de debug `5005`. |
+| `CONTAINER_CORE_LIMIT`, `CONTAINER_MAX_MEMORY` | Limites de CPU e memória considerados pelo script de execução. |
+| `GC_MIN_HEAP_FREE_RATIO`, `GC_MAX_HEAP_FREE_RATIO`, `GC_TIME_RATIO`, `GC_ADAPTIVE_SIZE_POLICY_WEIGHT` | Ajustes de proporções e política do coletor de lixo. |
+| `GC_METASPACE_SIZE`, `GC_MAX_METASPACE_SIZE`, `GC_CONTAINER_OPTIONS` | Tamanho de metaspace e opções para selecionar/configurar o coletor de lixo. |
+| `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` | Proxy e exceções de proxy do script/imagem alternativa. |
+
+Esta referência cobre as variáveis declaradas nos arquivos de configuração, Compose, Dockerfiles e código do projeto, além das chaves da configuração anterior. Propriedades adicionais do Quarkus também podem ser configuradas pelo nome nativo de ambiente correspondente, mas só chegam a um contêiner quando forem explicitamente passadas a ele.
 
 ### Opção 2: Local com Postgres do Docker
 
