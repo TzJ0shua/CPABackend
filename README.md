@@ -24,6 +24,19 @@ docker compose up --build
 O backend estará disponível em `http://localhost:8080`
 O PostgreSQL estará em `localhost:5433`
 
+### Imagem publicada com versão numérica
+
+A imagem desta entrega é `contatocpa/cpa-backend-test:1.0.0`, para Linux AMD64. No Compose da VPS, substitua o bloco `build` do serviço `backend` por `image: contatocpa/cpa-backend-test:1.0.0`, preservando `environment`, dependências, rede e portas. Mantenha o PostgreSQL em volume persistente e faça backup do banco antes da atualização; o Flyway aplica as migrações na inicialização.
+
+```bash
+docker compose pull backend
+docker compose up -d --no-build backend
+```
+
+As variáveis do backend são lidas em tempo de execução. Configure banco, CORS, Keycloak e os segredos na VPS conforme a referência abaixo. O `.env` precisa ser encaminhado pelo bloco `environment` do Compose; não é incorporado à imagem. Preserve `VALIDACAO_ALUNO_HASH_SEED` e `VERIFICACAO_EMAIL_DIGEST_SECRET` entre atualizações.
+
+O frontend correspondente é `contatocpa/cpa-frontend-test:1.0.0` e aceita API e Keycloak pelo ambiente do contêiner; veja o Compose de exemplo no README do frontend. Use outra tag numérica para novas releases, como `1.0.1`; esta publicação não altera a tag `latest` existente.
+
 ## Identificação de alunos e comprovantes
 
 A migração `V15__add_student_identity_and_validation_links.sql` adiciona `cpf_hash`, `matricula_hash` e `formulario_versao_id` em `VALIDACAO`, além de `AVALIACAO.validacao_id`. Respostas pertencem à avaliação; esse vínculo permite identificar todas as disciplinas e respostas de um comprovante. Registros anteriores permanecem sem esses vínculos, pois não há identificação suficiente para preenchê-los retroativamente.
