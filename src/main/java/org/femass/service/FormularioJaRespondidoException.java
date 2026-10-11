@@ -5,7 +5,8 @@ public class FormularioJaRespondidoException extends RuntimeException {
         for (Throwable cause = erro; cause != null; cause = cause.getCause()) {
             if (cause instanceof org.hibernate.exception.ConstraintViolationException constraint
                     && ("uk_validacao_aluno_cpf_versao".equals(constraint.getConstraintName())
-                    || "uk_validacao_aluno_matricula_versao".equals(constraint.getConstraintName()))) return true;
+                    || "uk_validacao_aluno_matricula_versao".equals(constraint.getConstraintName())
+                    || "uk_validacao_email_versao".equals(constraint.getConstraintName()))) return true;
         }
         return false;
     }

@@ -10,6 +10,10 @@ import java.util.UUID;
 @Entity
 @Table(name = "VALIDACAO")
 public class Validacao extends PanacheEntityBase {
+    @Column(name = "email_digest", length = 64)
+    private String emailDigest;
+    public String getEmailDigest() { return emailDigest; }
+    public void setEmailDigest(String value) { emailDigest = value; }
     @Column(name = "cpf_hash", length = 64)
     private String cpfHash;
     @Column(name = "matricula_hash", length = 64)

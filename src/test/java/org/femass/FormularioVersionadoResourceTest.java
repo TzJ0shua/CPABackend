@@ -13,7 +13,7 @@ import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.when;
 import static org.hamcrest.Matchers.*;
 
 @QuarkusTest
@@ -34,7 +34,7 @@ class FormularioVersionadoResourceTest {
     @org.junit.jupiter.api.BeforeEach
     @Transactional
     void prepararDisciplinaDoCenario() {
-        doNothing().when(verificacaoEmailService).consumirAutorizacaoParaEnvio(any(), any(), any(), any(), any());
+        when(verificacaoEmailService.consumirAutorizacaoParaEnvio(any(), any(), any(), any(), any())).thenReturn(null);
 
         nomeCurso = "Curso de teste versionado " + UUID.randomUUID();
         Curso curso = new Curso();

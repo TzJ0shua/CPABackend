@@ -9,6 +9,11 @@ import java.time.LocalDateTime;
 @Table(name = "VERIFICACAO_EMAIL")
 public class VerificacaoEmail extends PanacheEntityBase {
 
+    @Column(name = "acesso_chave_mestra", nullable = false)
+    private boolean acessoChaveMestra;
+    public boolean isAcessoChaveMestra() { return acessoChaveMestra; }
+    public void setAcessoChaveMestra(boolean value) { acessoChaveMestra = value; }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "ID", nullable = false)

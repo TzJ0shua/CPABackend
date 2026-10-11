@@ -61,6 +61,7 @@ class ChaveMestraResourceTest {
     @Test void chaveAutorizaJornadaSemEmailEImpedeTrocaDePublico() {
         String token = authorize("professor", "docente_gestao");
         submit("professor", "docente_gestao", token, 200);
+        submit("professor", "docente_gestao", token, 200); // Chave mestra permanece como exceção.
         submit("professor", "docente_instituicao", token, 200);
         submit("funcionario", "funcionario_gestao", token, 400);
         String funcionario = authorize("funcionario", "funcionario_gestao");

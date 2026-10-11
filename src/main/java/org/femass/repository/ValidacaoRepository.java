@@ -11,6 +11,10 @@ import java.util.UUID;
 @ApplicationScoped
 public class ValidacaoRepository implements PanacheRepositoryBase<Validacao, Long> {
 
+    public boolean existsByEmailIdentity(Long versionId, String emailDigest) {
+        return count("formularioVersao.id = ?1 and emailDigest = ?2", versionId, emailDigest) > 0;
+    }
+
     public boolean existsByStudentIdentity(Long versionId, String cpfHash, String matriculaHash) {
         return count("formularioVersao.id = ?1 and (cpfHash = ?2 or matriculaHash = ?3)",
                 versionId, cpfHash, matriculaHash) > 0;

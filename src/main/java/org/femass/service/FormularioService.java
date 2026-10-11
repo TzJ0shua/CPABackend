@@ -81,17 +81,20 @@ public class FormularioService {
             ? identidadeAluno.calcular(formularioDTO.respondent.cpf, formularioDTO.respondent.matricula, formularioDTO.campaign) : null;
         if (hashes != null && validacoes.existsByStudentIdentity(formularioVersao.getId(), hashes.cpf(), hashes.matricula()))
             throw new FormularioJaRespondidoException();
-        verificacaoEmailService.consumirAutorizacaoParaEnvio(
+        String emailDigest = verificacaoEmailService.consumirAutorizacaoParaEnvio(
                 formularioDTO.respondent.emailVerificationToken,
                 publico,
                 formularioDTO.campaign,
                 formularioDTO.form,
                 formularioDTO.formVersion
         );
+        if (emailDigest != null && validacoes.existsByEmailIdentity(formularioVersao.getId(), emailDigest))
+            throw new FormularioJaRespondidoException();
         String codigo = qrCodeService.criarCodigo();
         Validacao validacao = validacaoService.armazenarCodigoValidacao(codigo, formularioDTO.respondent.aceiteTermosCondicoesServico);
         validacao.setCodigoValidacao(codigo);
         validacao.setFormularioVersao(formularioVersao);
+        validacao.setEmailDigest(emailDigest);
         if (hashes != null) { validacao.setCpfHash(hashes.cpf()); validacao.setMatriculaHash(hashes.matricula()); }
         validacoes.flush();
         for (Avaliacao avaliacao : novasAvaliacoes) {

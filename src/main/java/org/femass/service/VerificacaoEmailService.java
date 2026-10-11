@@ -76,6 +76,7 @@ public class VerificacaoEmailService {
         LocalDateTime agora = LocalDateTime.now();
         String token = gerarSegredo(32);
         VerificacaoEmail autorizacao = new VerificacaoEmail();
+        autorizacao.setAcessoChaveMestra(true);
         // Não armazena a chave nem um endereço de e-mail: identificadores aleatórios apenas.
         autorizacao.setEmailDigest(calcularDigest(gerarSegredo(32)));
         autorizacao.setCodigoDigest(calcularDigest(gerarSegredo(32)));
@@ -173,9 +174,9 @@ public class VerificacaoEmailService {
     }
 
     @Transactional
-    public void consumirAutorizacaoParaEnvio(String token, PublicoAvaliacao publico,
+    public String consumirAutorizacaoParaEnvio(String token, PublicoAvaliacao publico,
                                               String campanha, String formulario, Integer versao) {
-        if (publico != PublicoAvaliacao.PROFESSOR && publico != PublicoAvaliacao.FUNCIONARIO) return;
+        if (publico != PublicoAvaliacao.PROFESSOR && publico != PublicoAvaliacao.FUNCIONARIO) return null;
         if (token == null || token.isBlank()) throw new IllegalArgumentException("Autorização por email ou chave mestra é obrigatória para este público");
         VerificacaoEmail verificacao = repository.findByAutorizacaoDigestForUpdate(calcularDigest(token));
         if (verificacao == null || verificacao.getStatus() != StatusVerificacaoEmail.VERIFICADO
@@ -188,10 +189,13 @@ public class VerificacaoEmailService {
         // individual. Isso permite concluir a jornada prevista (por exemplo,
         // disciplinas, gestão e instituição) sem solicitar outro PIN. A versão e
         // o formulário continuam validados por FormularioService ao salvar.
+        // Somente o digest do email confirmado identifica a participação. A chave mestra é uma exceção.
+        return verificacao.isAcessoChaveMestra() ? null : verificacao.getEmailDigest();
     }
 
     private DadosSolicitacao validarSolicitacao(SolicitarVerificacaoEmailDTO dto) {
-        if (dto == null || dto.email == null || !dto.email.matches("^[A-Za-z._%+-]+@femass\\.edu\\.br$")) {
+        String email = dto == null || dto.email == null ? null : dto.email.trim().toLowerCase(java.util.Locale.ROOT);
+        if (email == null || email.length() > 254 || !email.matches("^[a-z._%+-]+@femass\\.edu\\.br$")) {
             throw new IllegalArgumentException("E-mail institucional invalido");
         }
         PublicoAvaliacao publico = PublicoAvaliacao.from(dto.publico);
@@ -201,7 +205,7 @@ public class VerificacaoEmailService {
         if (isBlank(dto.campaign) || isBlank(dto.form) || dto.formVersion == null) {
             throw new IllegalArgumentException("Campanha, formulario e versao sao obrigatorios");
         }
-        return new DadosSolicitacao(dto.email.trim().toLowerCase(), publico, dto.campaign, dto.form, dto.formVersion);
+        return new DadosSolicitacao(email, publico, dto.campaign, dto.form, dto.formVersion);
     }
 
     private String calcularEmailDigest(String email) {

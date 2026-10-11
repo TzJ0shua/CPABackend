@@ -16,7 +16,7 @@ import java.security.MessageDigest;
 import java.nio.ByteBuffer;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.when;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.notNullValue;
@@ -39,7 +39,7 @@ class FormularioResourceTest {
     @org.junit.jupiter.api.BeforeEach
     @Transactional
     void liberarVerificacaoParaCenariosLegados() {
-        doNothing().when(verificacaoEmailService).consumirAutorizacaoParaEnvio(any(), any(), any(), any(), any());
+        when(verificacaoEmailService.consumirAutorizacaoParaEnvio(any(), any(), any(), any(), any())).thenReturn(null);
 
         nomeCurso = "Curso de teste issue 8 " + UUID.randomUUID();
         Curso curso = new Curso();

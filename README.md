@@ -36,6 +36,20 @@ Leitura simples, leitura detalhada e histórico em `/validacao` incluem `resumo`
 
 ## Configuração por `.env`
 
+### Resposta única por email
+
+A migração `V16__limit_email_participation_per_version.sql` adiciona `VALIDACAO.email_digest` e um índice único por versão e digest de email. Docentes e funcionários que entram por PIN podem responder uma vez por versão de formulário da campanha. Outra versão, outro formulário ou outra campanha são permitidos. Pedir um novo PIN não libera uma versão já respondida; requisições simultâneas também retornam `409` com `code: FORMULARIO_JA_RESPONDIDO` para a participação repetida, sem gravar respostas parciais.
+
+A identidade vem exclusivamente da autorização confirmada no servidor. O email informado em `respondent` não substitui essa identidade. O endereço é normalizado sem espaços nas extremidades e em minúsculas, e apenas seu HMAC-SHA-256 é persistido. Mantenha `VERIFICACAO_EMAIL_DIGEST_SECRET` estável: trocá-lo altera os digests e compromete o controle das participações anteriores. A autorização pode continuar sendo usada para outros formulários durante sua validade. Todas as disciplinas de uma versão devem ser enviadas juntas.
+
+**A chave mestra é uma exceção ao limite por email**, inclusive quando o serviço de email está indisponível. A migração identifica autorizações antigas por chave que não passaram pela confirmação de PIN. Validações salvas antes da V16 não possuem o digest de identidade e não podem ser associadas retroativamente a um email; o controle começa nos novos envios. O email e seu digest não são retornados no comprovante ou no resumo do validador.
+
+### Campo de comentários
+
+Comentários dependem de `commentAllowed` (`FORMULARIO_VERSAO.comentario_permitido`) em cada versão. A configuração inicial desabilita comentários em vários formulários, incluindo os formulários de alunos; novos rascunhos também começam com o campo desabilitado. O frontend exibe **Comentários adicionais** somente quando o catálogo retorna `commentAllowed: true`, e envia o conteúdo em `comment` (avaliação geral) ou `subjects[].comment` (por disciplina). O backend salva em `AVALIACAO.comentario`, remove tags HTML e valida o limite de 1000 caracteres.
+
+No painel, abra a versão em rascunho, marque **Permitir comentário**, preencha **Aviso sobre o comentário**, salve e publique. Para versões já publicadas, clone primeiro; a configuração publicada permanece imutável. Confirme o período, aprove e abra a campanha para disponibilizar a nova versão. Habilitar comentários não os torna obrigatórios. Envios com comentários em versões que não os permitem retornam `400`.
+
 Para Docker Compose, crie `.env` na raiz. Ele é ignorado pelo Git. Os valores abaixo são exemplos locais; substitua todos os placeholders e nunca versione credenciais reais.
 
 O arquivo [`.env.example`](.env.example) reúne as variáveis do backend, uma referência do frontend e alternativas para os domínios de teste. Copie-o para `.env` e ajuste os valores. Ele usa as portas externas `5435`, `8081` e `5175`; o nome do banco permanece `cpa-femass` para corresponder ao healthcheck atual. As opções antigas e específicas de outras formas de execução estão comentadas. Para o frontend, copie somente seu próprio `.env.example`, sem segredos. As URLs e portas do bloco abaixo são uma alternativa local às do arquivo.
