@@ -60,6 +60,7 @@ VERIFICACAO_EMAIL_MAX_TENTATIVAS=5
 VERIFICACAO_EMAIL_MAX_REENVIOS_JANELA=3
 VERIFICACAO_EMAIL_JANELA_REENVIO=PT1H
 VERIFICACAO_EMAIL_DIGEST_SECRET=gere-um-segredo-longo-e-aleatorio
+VERIFICACAO_EMAIL_CHAVE_MESTRA=
 
 # Gmail API — habilite após configurar OAuth, remetente e segredo de digest.
 VERIFICACAO_EMAIL_GMAIL_ENABLED=false
@@ -127,6 +128,7 @@ O Compose também define `KC_HEALTH_ENABLED=true` e `KC_HOSTNAME_BACKCHANNEL_DYN
 | `VERIFICACAO_EMAIL_MAX_REENVIOS_JANELA` | Limite de solicitações na janela de reenvio. | `3`. |
 | `VERIFICACAO_EMAIL_JANELA_REENVIO` | Duração da janela de limitação de reenvios. | `PT1H`. |
 | `VERIFICACAO_EMAIL_DIGEST_SECRET` | Segredo usado para calcular o digest dos endereços de e-mail. | Configure um segredo longo e aleatório; não utilize os fallbacks locais em produção. |
+| `VERIFICACAO_EMAIL_CHAVE_MESTRA` | Chave compartilhada para acesso aos formulários de professor e funcionário, como alternativa ao PIN de email. | Vazia por padrão (acesso por chave desabilitado). Configure somente no backend, com um valor longo e aleatório de até 1024 caracteres. |
 | `VERIFICACAO_EMAIL_GMAIL_ENABLED` | Habilita envio real pela Gmail API. | `false`. |
 | `VERIFICACAO_EMAIL_GMAIL_CLIENT_ID` | Client ID OAuth2 do Google. | `not-configured`; obrigatório para envio real. |
 | `VERIFICACAO_EMAIL_GMAIL_CLIENT_SECRET` | Client secret OAuth2 do Google. | `not-configured`; obrigatório para envio real. |
@@ -201,6 +203,16 @@ Se você tiver PostgreSQL instalado localmente na porta padrão `5432`, apenas:
 ```
 
 ## ✉️ Envio real de verificação por Gmail API
+
+### Acesso por email ou chave mestra
+
+Configure `VERIFICACAO_EMAIL_CHAVE_MESTRA` no `.env` deste backend para permitir que professores e funcionários acessem a pesquisa com uma chave fornecida pela comissão. O Compose encaminha essa variável ao container; recrie o backend após alterá-la. Não use prefixo `VITE_`, não versione a chave e não a coloque no frontend. Sem valor, a opção fica indisponível. Use uma chave longa e aleatória e distribua-a apenas aos participantes autorizados.
+
+Ao entrar na etapa de acesso, o frontend consulta `GET /verificacao-email/configuracao`, que retorna somente `{ "emailDisponivel": boolean, "chaveMestraDisponivel": boolean }`, sem segredos e sem cache. O email está disponível quando Gmail está habilitado, client ID, client secret e refresh token estão preenchidos (sem o placeholder `not-configured`), o remetente tem formato válido e `VERIFICACAO_EMAIL_DIGEST_SECRET` foi configurado. Essa consulta verifica a configuração local; credenciais revogadas, quotas e falhas de rede do Google são detectadas no envio, que retorna `503` e também permite recorrer à chave mestra.
+
+Com email configurado, o participante pode escolher PIN institucional ou chave. Sem configuração, o email fica somente para leitura, com **Serviço de email indisponível** e orientação para inserir a chave mestra. Se nenhuma alternativa estiver configurada, o participante deve contatar a comissão.
+
+`POST /verificacao-email/chave-mestra` recebe `{ "chave": "<segredo>", "publico": "professor", "campaign": "cpa-2026", "form": "docente_gestao", "formVersion": 1 }`. Aceita somente professor ou funcionário e formulário publicado da campanha disponível. Retorna `{ "submissionToken": "<autorização opaca>" }`; chave incorreta retorna `401`, dados inválidos `400`, campanha indisponível `409` e chave não configurada `503`. A chave é comparada no backend, não é persistida e não segue no envio das respostas. A autorização usa `VERIFICACAO_EMAIL_AUTORIZACAO_EXPIRACAO`, fica vinculada ao público e à campanha e permite concluir sua jornada de formulários, como a autorização do PIN. As regras de período, ativação e publicação continuam sendo verificadas em cada envio.
 
 O envio dos PINs para professores e funcionários usa a Gmail API com OAuth2. O backend
 recebe somente configurações por ambiente; client secret, refresh token e o segredo HMAC

@@ -32,6 +32,7 @@ class CampaignPeriodResourceTest {
         when(clock.withZone(any())).thenReturn(Clock.fixed(Instant.parse("2036-10-10T15:00:00Z"), ZoneOffset.UTC)
             .withZone(ZoneId.of("America/Sao_Paulo")));
         reset(emailSender);
+        when(emailSender.configurado()).thenReturn(true);
     }
     @AfterEach void cleanup() {
         QuarkusTransaction.requiringNew().run(() -> {

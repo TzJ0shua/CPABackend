@@ -5,6 +5,8 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.femass.dto.ConfirmarVerificacaoEmailDTO;
+import org.femass.dto.ChaveMestraDTO;
+import org.femass.dto.ConfiguracaoAcessoDTO;
 import org.femass.dto.SolicitarVerificacaoEmailDTO;
 import org.femass.entity.PublicoAvaliacao;
 import org.femass.entity.StatusVerificacaoEmail;
@@ -20,6 +22,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.Optional;
 
 @ApplicationScoped
 public class VerificacaoEmailService {
@@ -36,10 +39,64 @@ public class VerificacaoEmailService {
     @ConfigProperty(name = "verificacao-email.max-reenvios-janela", defaultValue = "3") int maxReenviosJanela;
     @ConfigProperty(name = "verificacao-email.janela-reenvio", defaultValue = "PT1H") Duration janelaReenvio;
     @ConfigProperty(name = "verificacao-email.email-digest-secret") String emailDigestSecret;
+    @ConfigProperty(name = "verificacao-email.chave-mestra") Optional<String> chaveMestra;
+
+    public ConfiguracaoAcessoDTO configuracao() {
+        return new ConfiguracaoAcessoDTO(emailSender.configurado() && digestConfigurado(), chaveMestraConfigurada());
+    }
+
+    private boolean digestConfigurado() {
+        return !isBlank(emailDigestSecret) && !"not-configured".equals(emailDigestSecret)
+                && !"dev-only-change-me".equals(emailDigestSecret);
+    }
+
+    private boolean chaveMestraConfigurada() {
+        return chaveMestra.filter(valor -> !valor.isBlank() && !"not-configured".equals(valor)).isPresent();
+    }
+
+    @Transactional
+    public String autorizarChaveMestra(ChaveMestraDTO dto) {
+        if (dto == null || isBlank(dto.chave()) || dto.chave().length() > 1024
+                || isBlank(dto.campaign()) || dto.campaign().length() > 100
+                || isBlank(dto.form()) || dto.form().length() > 100
+                || dto.formVersion() == null || dto.formVersion() < 1) {
+            throw new IllegalArgumentException("Dados de acesso inválidos");
+        }
+        PublicoAvaliacao publico = PublicoAvaliacao.from(dto.publico());
+        if (publico != PublicoAvaliacao.PROFESSOR && publico != PublicoAvaliacao.FUNCIONARIO)
+            throw new IllegalArgumentException("Chave mestra disponível apenas para professor ou funcionário");
+        if (!chaveMestraConfigurada()) throw new EmailDeliveryException();
+        if (!MessageDigest.isEqual(calcularDigest(dto.chave()).getBytes(StandardCharsets.US_ASCII),
+                calcularDigest(chaveMestra.orElseThrow()).getBytes(StandardCharsets.US_ASCII))) {
+            throw new SecurityException("Chave mestra inválida");
+        }
+        disponibilidade.exigirDisponivel(dto.campaign());
+        if (versoes.findPublicada(dto.campaign(), dto.form(), publico, dto.formVersion()) == null)
+            throw new IllegalArgumentException("Formulário publicado não disponível");
+        LocalDateTime agora = LocalDateTime.now();
+        String token = gerarSegredo(32);
+        VerificacaoEmail autorizacao = new VerificacaoEmail();
+        // Não armazena a chave nem um endereço de e-mail: identificadores aleatórios apenas.
+        autorizacao.setEmailDigest(calcularDigest(gerarSegredo(32)));
+        autorizacao.setCodigoDigest(calcularDigest(gerarSegredo(32)));
+        autorizacao.setPublico(publico);
+        autorizacao.setCampanha(dto.campaign());
+        autorizacao.setFormulario(dto.form());
+        autorizacao.setVersaoFormulario(dto.formVersion());
+        autorizacao.setStatus(StatusVerificacaoEmail.VERIFICADO);
+        autorizacao.setDataCriacao(agora);
+        autorizacao.setExpiraEm(agora.plus(autorizacaoExpiracao));
+        autorizacao.setCodigoValidadoEm(agora);
+        autorizacao.setAutorizacaoDigest(calcularDigest(token));
+        autorizacao.setAutorizacaoExpiraEm(agora.plus(autorizacaoExpiracao));
+        repository.persist(autorizacao);
+        return token;
+    }
 
     @Transactional
     public Long solicitar(SolicitarVerificacaoEmailDTO dto) {
         DadosSolicitacao dados = validarSolicitacao(dto);
+        if (!configuracao().emailDisponivel()) throw new EmailDeliveryException();
         disponibilidade.exigirDisponivel(dados.campanha());
         if (versoes.findPublicada(dados.campanha(), dados.formulario(), dados.publico(), dados.versao()) == null)
             throw new IllegalArgumentException("Formulário publicado não disponível");
@@ -119,13 +176,13 @@ public class VerificacaoEmailService {
     public void consumirAutorizacaoParaEnvio(String token, PublicoAvaliacao publico,
                                               String campanha, String formulario, Integer versao) {
         if (publico != PublicoAvaliacao.PROFESSOR && publico != PublicoAvaliacao.FUNCIONARIO) return;
-        if (token == null || token.isBlank()) throw new IllegalArgumentException("Verificacao de e-mail e obrigatoria para este publico");
+        if (token == null || token.isBlank()) throw new IllegalArgumentException("Autorização por email ou chave mestra é obrigatória para este público");
         VerificacaoEmail verificacao = repository.findByAutorizacaoDigestForUpdate(calcularDigest(token));
         if (verificacao == null || verificacao.getStatus() != StatusVerificacaoEmail.VERIFICADO
                 || !verificacao.getAutorizacaoExpiraEm().isAfter(LocalDateTime.now())
                 || verificacao.getPublico() != publico
                 || !verificacao.getCampanha().equals(campanha)) {
-            throw new IllegalArgumentException("Verificacao de e-mail invalida ou expirada");
+            throw new IllegalArgumentException("Autorização de acesso inválida ou expirada");
         }
         // A autorização é vinculada ao público e à campanha, não a um formulário
         // individual. Isso permite concluir a jornada prevista (por exemplo,
@@ -149,8 +206,7 @@ public class VerificacaoEmailService {
 
     private String calcularEmailDigest(String email) {
         try {
-            if (isBlank(emailDigestSecret) || "not-configured".equals(emailDigestSecret)
-                    || "dev-only-change-me".equals(emailDigestSecret)) {
+            if (!digestConfigurado()) {
                 throw new IllegalStateException("Servico de verificacao indisponivel");
             }
             Mac mac = Mac.getInstance("HmacSHA256");

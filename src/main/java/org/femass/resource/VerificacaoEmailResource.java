@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.POST;
+import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
@@ -18,6 +19,29 @@ import org.femass.service.VerificacaoEmailService;
 @Produces(MediaType.APPLICATION_JSON)
 public class VerificacaoEmailResource {
     @Inject VerificacaoEmailService service;
+
+    @GET
+    @Path("/configuracao")
+    public Response configuracao() {
+        return Response.ok(service.configuracao()).header("Cache-Control", "no-store").build();
+    }
+
+    @POST
+    @Path("/chave-mestra")
+    public Response chaveMestra(ChaveMestraDTO dto) {
+        try {
+            return Response.ok(new ConfirmarVerificacaoEmailResponseDTO(service.autorizarChaveMestra(dto)))
+                    .header("Cache-Control", "no-store").build();
+        } catch (SecurityException e) {
+            return Response.status(401).entity(new ErrorResponseDTO("Chave mestra inválida")).build();
+        } catch (org.femass.service.CampanhaIndisponivelException e) {
+            return Response.status(409).entity(new ErrorResponseDTO(e.getMessage())).build();
+        } catch (IllegalArgumentException e) {
+            return Response.status(400).entity(new ErrorResponseDTO(e.getMessage())).build();
+        } catch (EmailDeliveryException e) {
+            return Response.status(503).entity(new ErrorResponseDTO("Acesso por chave mestra indisponível")).build();
+        }
+    }
 
     @POST
     @Path("/solicitar")
