@@ -24,6 +24,16 @@ public class Campanha {
     @Column(name = "mensagem_disponibilidade", length = 500)
     private String mensagemDisponibilidade;
 
+    @Column(name = "data_inicio")
+    private java.time.LocalDate dataInicio;
+    @Column(name = "data_fim")
+    private java.time.LocalDate dataFim;
+
+    public java.time.LocalDate getDataInicio() { return dataInicio; }
+    public void setDataInicio(java.time.LocalDate value) { dataInicio = value; }
+    public java.time.LocalDate getDataFim() { return dataFim; }
+    public void setDataFim(java.time.LocalDate value) { dataFim = value; }
+
     public Long getId() { return id; }
     public String getCodigo() { return codigo; }
     public void setCodigo(String codigo) { this.codigo = codigo; }

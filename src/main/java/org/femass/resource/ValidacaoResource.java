@@ -17,6 +17,7 @@ public class ValidacaoResource {
 
     @Inject
     ValidacaoService service;
+    @Inject org.femass.service.ResumoValidacaoService resumos;
 
     @POST
     @Path("/armazenar-codigo")
@@ -48,8 +49,7 @@ public class ValidacaoResource {
 
         try {
             Validacao validacao = service.validarCodigo(codigo);
-            return Response.ok(new ValidacaoStatusDTO(codigo, true, "VALIDADO", "Codigo validado com sucesso",
-                codigoDigestFinal(validacao)), MediaType.APPLICATION_JSON).build();
+            return Response.ok(statusComResumo(validacao, codigo), MediaType.APPLICATION_JSON).build();
         } catch (IllegalArgumentException e) {
             return Response.status(Response.Status.NOT_FOUND)
                 .entity(new ErrorResponseDTO(e.getMessage()))
@@ -97,6 +97,7 @@ public class ValidacaoResource {
                 validacao.getTentativasValidacao(),
                 tempoDecorrido
             );
+            response.setResumo(resumos.consultar(validacao.getId()));
             return Response.ok(response, MediaType.APPLICATION_JSON).build();
         } catch (IllegalArgumentException e) {
             return Response.status(Response.Status.NOT_FOUND)
@@ -195,8 +196,7 @@ public class ValidacaoResource {
     public Response historico() {
        try{
            List<Validacao> historico = service.buscarDezUltimosCodigosValidados();
-           return Response.ok(historico.stream().map(v -> new ValidacaoStatusDTO("codigo", true, "VALIDADO", "Codigo validado",
-               codigoDigestFinal(v))).toList(), MediaType.APPLICATION_JSON).build();
+           return Response.ok(historico.stream().map(v -> statusComResumo(v, "codigo")).toList(), MediaType.APPLICATION_JSON).build();
        }catch (IllegalArgumentException e) {
            return Response.status(Response.Status.NOT_FOUND)
                    .entity(new ErrorResponseDTO(e.getMessage()))
@@ -211,5 +211,10 @@ public class ValidacaoResource {
     private String codigoDigestFinal(Validacao validacao) {
         String digest = validacao.getCodigoDigest();
         return digest.substring(digest.length() - 10);
+    }
+    private ValidacaoStatusDTO statusComResumo(Validacao validacao, String codigo) {
+        var dto = new ValidacaoStatusDTO(codigo, true, "VALIDADO", "Codigo validado com sucesso", codigoDigestFinal(validacao));
+        dto.setResumo(resumos.consultar(validacao.getId()));
+        return dto;
     }
 }

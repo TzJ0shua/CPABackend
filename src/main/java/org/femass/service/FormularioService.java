@@ -38,6 +38,9 @@ public class FormularioService {
     @Inject
     DisciplinaRepository disciplinaRepository;
 
+    @Inject DisponibilidadeCampanhaService disponibilidade;
+    @Inject IdentidadeAlunoService identidadeAluno;
+    @Inject org.femass.repository.ValidacaoRepository validacoes;
     @Inject FormularioVersaoRepository formularioVersaoRepository;
     @Inject PerguntaVersaoRepository perguntaVersaoRepository;
     @Inject OpcaoPerguntaRepository opcaoPerguntaRepository;
@@ -63,33 +66,43 @@ public class FormularioService {
 
     @Transactional
     public Validacao salvarEGerarHash(FormularioDTO formularioDTO) {
-        salvarFormulario(formularioDTO);
-        String codigoValidacao = qrCodeService.codificar(formularioDTO);
-        Validacao validacao = validacaoService.armazenarCodigoValidacao(
-                codigoValidacao,
-                formularioDTO.respondent.aceiteTermosCondicoesServico
-        );
-        validacao.setCodigoValidacao(codigoValidacao);
-        return validacao;
+        return salvarFormulario(formularioDTO);
     }
 
-    private void salvarFormulario(FormularioDTO formularioDTO) {
+    private Validacao salvarFormulario(FormularioDTO formularioDTO) {
         validarFormulario(formularioDTO);
+        disponibilidade.exigirDisponivel(formularioDTO.campaign);
         PublicoAvaliacao publico = PublicoAvaliacao.from(formularioDTO.respondent.type);
-        verificacaoEmailService.consumirAutorizacaoParaEnvio(
+        FormularioVersao formularioVersao = resolverFormularioVersao(formularioDTO, publico);
+        List<Avaliacao> novasAvaliacoes = formularioVersao.getEscopo() == EscopoFormulario.DISCIPLINA
+            ? prepararPorDisciplina(formularioDTO, publico, formularioVersao)
+            : prepararGeral(formularioDTO, publico, formularioVersao);
+        IdentidadeAlunoService.Hashes hashes = publico == PublicoAvaliacao.ALUNO
+            ? identidadeAluno.calcular(formularioDTO.respondent.cpf, formularioDTO.respondent.matricula, formularioDTO.campaign) : null;
+        if (hashes != null && validacoes.existsByStudentIdentity(formularioVersao.getId(), hashes.cpf(), hashes.matricula()))
+            throw new FormularioJaRespondidoException();
+        String emailDigest = verificacaoEmailService.consumirAutorizacaoParaEnvio(
                 formularioDTO.respondent.emailVerificationToken,
                 publico,
                 formularioDTO.campaign,
                 formularioDTO.form,
                 formularioDTO.formVersion
         );
-        FormularioVersao formularioVersao = resolverFormularioVersao(formularioDTO, publico);
-        if (formularioVersao.getEscopo() == EscopoFormulario.DISCIPLINA) {
-            salvarPorDisciplina(formularioDTO, publico, formularioVersao);
-        } else {
-            salvarGeral(formularioDTO, publico, formularioVersao);
+        if (emailDigest != null && validacoes.existsByEmailIdentity(formularioVersao.getId(), emailDigest))
+            throw new FormularioJaRespondidoException();
+        String codigo = qrCodeService.criarCodigo();
+        Validacao validacao = validacaoService.armazenarCodigoValidacao(codigo, formularioDTO.respondent.aceiteTermosCondicoesServico);
+        validacao.setCodigoValidacao(codigo);
+        validacao.setFormularioVersao(formularioVersao);
+        validacao.setEmailDigest(emailDigest);
+        if (hashes != null) { validacao.setCpfHash(hashes.cpf()); validacao.setMatriculaHash(hashes.matricula()); }
+        validacoes.flush();
+        for (Avaliacao avaliacao : novasAvaliacoes) {
+            avaliacao.setValidacao(validacao);
+            avaliacaoRepository.persist(avaliacao);
         }
         avaliacaoRepository.flush();
+        return validacao;
     }
 
     private void validarFormulario(FormularioDTO formularioDTO) {
@@ -145,11 +158,11 @@ public class FormularioService {
     private void preencherRespostaVersionada(Resposta resposta, RespostaDTO dto, FormularioVersao versao) {
         String codigo = dto.questionId;
         PerguntaVersao pergunta = perguntaVersaoRepository.findByVersionAndCode(versao.getId(), codigo);
-        if (pergunta == null) throw new IllegalArgumentException("Pergunta nao pertence ao formulario informado");
+        if (pergunta == null || !pergunta.isAtivo()) throw new IllegalArgumentException("Pergunta nao pertence ao formulario informado");
         if (dto.questionText != null && !dto.questionText.isBlank() && !dto.questionText.equals(pergunta.getTexto()))
             throw new IllegalArgumentException("Texto da pergunta nao corresponde a versao informada");
         OpcaoPergunta opcao = opcaoPerguntaRepository.findByQuestionAndCode(pergunta.getId(), dto.optionCode);
-        if (opcao == null) throw new IllegalArgumentException("Opcao de resposta invalida para a pergunta informada");
+        if (opcao == null || !opcao.isAtivo()) throw new IllegalArgumentException("Opcao de resposta invalida para a pergunta informada");
         resposta.setPerguntaVersao(pergunta);
         resposta.setOpcaoCodigo(opcao.getCodigo());
         resposta.setOpcaoRotulo(opcao.getRotulo());
@@ -165,30 +178,34 @@ public class FormularioService {
         if (limpo.length() > 1000) throw new IllegalArgumentException("Comentario deve ter no maximo 1000 caracteres");
         return limpo;
     }
-    private void salvarPorDisciplina(FormularioDTO dto, PublicoAvaliacao publico, FormularioVersao versao) {
+    private List<Avaliacao> prepararPorDisciplina(FormularioDTO dto, PublicoAvaliacao publico, FormularioVersao versao) {
         if (dto.course == null || dto.course.name == null || dto.course.name.isBlank())
             throw new IllegalArgumentException("Curso e obrigatorio para este formulario");
         if (dto.subjects == null || dto.subjects.isEmpty())
             throw new IllegalArgumentException("Ao menos uma disciplina deve ser informada");
         Curso curso = cursoRepository.findByNome(dto.course.name);
-        if (curso == null) throw new IllegalArgumentException("Curso informado nao existe");
+        if (curso == null || !curso.isAtivo()) throw new IllegalArgumentException("Curso informado nao existe");
+        java.util.Set<Long> disciplinas = new java.util.HashSet<>();
+        List<Avaliacao> resultado = new ArrayList<>();
         for (SubjectDTO subject : dto.subjects) {
             validarSubject(subject);
             Disciplina disciplina;
             try { disciplina = disciplinaRepository.findByIdAndCurso(Long.parseLong(subject.subjectId), curso.getId()); }
             catch (NumberFormatException e) { throw new IllegalArgumentException("Identificador da disciplina invalido"); }
-            if (disciplina == null) throw new IllegalArgumentException("Disciplina informada nao existe para o curso");
-            persistirAvaliacao(publico, versao, disciplina, subject.answers, subject.comment);
+            if (disciplina == null || !disciplina.isAtivo()) throw new IllegalArgumentException("Disciplina informada nao existe para o curso");
+            if (!disciplinas.add(disciplina.getId())) throw new IllegalArgumentException("Disciplina repetida no envio");
+            resultado.add(prepararAvaliacao(publico, versao, disciplina, subject.answers, subject.comment));
         }
+        return resultado;
     }
 
-    private void salvarGeral(FormularioDTO dto, PublicoAvaliacao publico, FormularioVersao versao) {
+    private List<Avaliacao> prepararGeral(FormularioDTO dto, PublicoAvaliacao publico, FormularioVersao versao) {
         if (dto.answers == null || dto.answers.isEmpty())
             throw new IllegalArgumentException("Ao menos uma resposta deve ser informada");
-        persistirAvaliacao(publico, versao, null, dto.answers, dto.comment);
+        return List.of(prepararAvaliacao(publico, versao, null, dto.answers, dto.comment));
     }
 
-    private void persistirAvaliacao(PublicoAvaliacao publico, FormularioVersao versao, Disciplina disciplina,
+    private Avaliacao prepararAvaliacao(PublicoAvaliacao publico, FormularioVersao versao, Disciplina disciplina,
                                     List<RespostaDTO> respostasDto, String comentario) {
         Avaliacao avaliacao = new Avaliacao();
         avaliacao.setDisciplina(disciplina);
@@ -204,6 +221,6 @@ public class FormularioService {
             respostas.add(resposta);
         }
         avaliacao.setRespostas(respostas);
-        avaliacaoRepository.persist(avaliacao);
+        return avaliacao;
     }
 }

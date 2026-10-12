@@ -28,9 +28,18 @@ public class GmailApiEmailSender implements EmailSender {
     @ConfigProperty(name = "verificacao-email.gmail.request-timeout", defaultValue = "PT15S") Duration requestTimeout;
 
     @Override
+    public boolean configurado() {
+        return enabled && configurado(clientId) && configurado(clientSecret) && configurado(refreshToken)
+                && isValidAddress(from);
+    }
+
+    private boolean configurado(String valor) {
+        return !isBlank(valor) && !"not-configured".equals(valor);
+    }
+
+    @Override
     public void enviarPin(String destinatario, String pin) {
-        if (!enabled || isBlank(clientId) || isBlank(clientSecret) || isBlank(refreshToken)
-                || !isValidAddress(from) || !isValidAddress(destinatario)) {
+        if (!configurado() || !isValidAddress(destinatario)) {
             throw new EmailDeliveryException();
         }
         try {

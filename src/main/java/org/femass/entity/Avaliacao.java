@@ -7,6 +7,11 @@ import java.util.List;
 @Entity
 @Table(name = "AVALIACAO")
 public class Avaliacao {
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "validacao_id")
+    private Validacao validacao;
+    public Validacao getValidacao() { return validacao; }
+    public void setValidacao(Validacao value) { validacao = value; }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

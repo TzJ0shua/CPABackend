@@ -14,6 +14,6 @@ public class CursoRepository implements PanacheRepositoryBase<Curso, Long> {
     }
 
     public List<Curso> findAllOrderedByNome() {
-        return find("order by nome").list();
+        return find("ativo = true order by nome").list();
     }
 }

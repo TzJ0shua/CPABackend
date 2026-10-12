@@ -20,13 +20,43 @@
       "bearerOnly": true
     },
     {
+      "clientId": "cpa-frontend",
+      "name": "CPA Frontend administrativo",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["${KEYCLOAK_FRONTEND_URL}/admin", "${KEYCLOAK_FRONTEND_URL}/admin/*"],
+      "webOrigins": ["${KEYCLOAK_FRONTEND_URL}"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "${KEYCLOAK_FRONTEND_URL}/"
+      },
+      "protocolMappers": [{
+        "name": "cpa-backend-audience",
+        "protocol": "openid-connect",
+        "protocolMapper": "oidc-audience-mapper",
+        "consentRequired": false,
+        "config": { "included.client.audience": "cpa-backend", "id.token.claim": "false", "access.token.claim": "true" }
+      }]
+    },
+    {
       "clientId": "cpa-dev-cli",
       "name": "Cliente de desenvolvimento CPA",
       "enabled": true,
       "publicClient": true,
       "protocol": "openid-connect",
       "standardFlowEnabled": false,
-      "directAccessGrantsEnabled": true
+      "directAccessGrantsEnabled": true,
+      "protocolMappers": [{
+        "name": "cpa-backend-audience",
+        "protocol": "openid-connect",
+        "protocolMapper": "oidc-audience-mapper",
+        "consentRequired": false,
+        "config": { "included.client.audience": "cpa-backend", "id.token.claim": "false", "access.token.claim": "true" }
+      }]
     }
   ],
   "users": [

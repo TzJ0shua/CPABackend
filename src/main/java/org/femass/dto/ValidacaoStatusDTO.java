@@ -1,6 +1,9 @@
 package org.femass.dto;
 
 public class ValidacaoStatusDTO {
+    private ResumoValidacaoDTO resumo;
+    public ResumoValidacaoDTO getResumo() { return resumo; }
+    public void setResumo(ResumoValidacaoDTO value) { resumo = value; }
     private String codigoValidacao;
     private Boolean validado;
     private String status;

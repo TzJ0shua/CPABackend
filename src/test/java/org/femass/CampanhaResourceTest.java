@@ -16,6 +16,12 @@ class CampanhaResourceTest {
     @Inject
     CampanhaRepository campanhaRepository;
 
+    @org.junit.jupiter.api.AfterEach
+    @Transactional
+    void cleanup() {
+        campanhaRepository.update("estado = ?1 where codigo like ?2", EstadoCampanha.ENCERRADA, "status-%");
+    }
+
     @Test
     void deveExporCampanhaAbertaComoDisponivelSemAutenticacao() {
         String codigo = criarCampanha(EstadoCampanha.ABERTA, "Responda agora.");
@@ -60,6 +66,8 @@ class CampanhaResourceTest {
         campanha.setCodigo("status-" + estado.name().toLowerCase() + "-" + System.nanoTime());
         campanha.setNome("Campanha de teste");
         campanha.setEstado(estado);
+        campanha.setDataInicio(java.time.LocalDate.now(org.femass.service.DisponibilidadeCampanhaService.ZONE));
+        campanha.setDataFim(campanha.getDataInicio());
         campanha.setMensagemDisponibilidade(mensagem);
         campanhaRepository.persist(campanha);
         return campanha.getCodigo();

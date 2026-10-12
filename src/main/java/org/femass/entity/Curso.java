@@ -6,6 +6,11 @@ import java.util.List;
 @Entity
 @Table(name = "CURSO")
 public class Curso {
+    @Column(nullable = false)
+    private boolean ativo = true;
+    public boolean isAtivo() { return ativo; }
+    public void setAtivo(boolean ativo) { this.ativo = ativo; }
+
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

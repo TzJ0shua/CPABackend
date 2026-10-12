@@ -13,11 +13,14 @@ import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.when;
 import static org.hamcrest.Matchers.*;
 
 @QuarkusTest
 class FormularioVersionadoResourceTest {
+    @jakarta.inject.Inject CampaignTestFixtures campaignFixtures;
+    @org.junit.jupiter.api.BeforeEach void scheduleFixture() { campaignFixtures.scheduleSeed(); }
+    @org.junit.jupiter.api.AfterEach void clearFixture() { campaignFixtures.clearSeed(); }
 
     @InjectMock
     VerificacaoEmailService verificacaoEmailService;
@@ -31,7 +34,7 @@ class FormularioVersionadoResourceTest {
     @org.junit.jupiter.api.BeforeEach
     @Transactional
     void prepararDisciplinaDoCenario() {
-        doNothing().when(verificacaoEmailService).consumirAutorizacaoParaEnvio(any(), any(), any(), any(), any());
+        when(verificacaoEmailService.consumirAutorizacaoParaEnvio(any(), any(), any(), any(), any())).thenReturn(null);
 
         nomeCurso = "Curso de teste versionado " + UUID.randomUUID();
         Curso curso = new Curso();

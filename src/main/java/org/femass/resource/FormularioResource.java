@@ -23,6 +23,22 @@ public class FormularioResource {
     @Inject
     private FormularioService formularioService;
 
+    @Inject org.femass.service.JornadaAlunoService jornadas;
+
+    @POST @Path("/aluno/progresso")
+    @Consumes(MediaType.APPLICATION_JSON) @Produces(MediaType.APPLICATION_JSON)
+    public Response progressoAluno(org.femass.dto.ProgressoAlunoDTO.Consulta consulta) {
+        try {
+            return Response.ok(jornadas.consultar(consulta)).header("Cache-Control", "no-store").build();
+        } catch (org.femass.service.IdentificacaoIndisponivelException e) {
+            return Response.status(503).entity(new ErrorResponseDTO(e.getMessage(), "IDENTIFICACAO_INDISPONIVEL")).build();
+        } catch (org.femass.service.CampanhaIndisponivelException e) {
+            return Response.status(409).entity(new ErrorResponseDTO(e.getMessage())).build();
+        } catch (IllegalArgumentException e) {
+            return Response.status(400).entity(new ErrorResponseDTO(e.getMessage())).build();
+        }
+    }
+
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
@@ -32,19 +48,32 @@ public class FormularioResource {
             String digest = validacao.getCodigoDigest();
             return Response.ok(new QRCodeResponseDTO(validacao.getCodigoValidacao(), validacao.getCodigoValidacao(),
                 digest.substring(digest.length() - 10))).build();
+        } catch (org.femass.service.FormularioJaRespondidoException e) {
+            return duplicidade();
+        } catch (org.femass.service.IdentificacaoIndisponivelException e) {
+            return Response.status(503).entity(new ErrorResponseDTO(e.getMessage(), "IDENTIFICACAO_INDISPONIVEL")).build();
+        } catch (org.femass.service.CampanhaIndisponivelException e) {
+            return Response.status(409).entity(new ErrorResponseDTO(e.getMessage())).build();
         } catch (IllegalArgumentException | InvalidFormularioException e) {
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(new ErrorResponseDTO(e.getMessage()))
                     .build();
         } catch (PersistenceException e) {
+            if (org.femass.service.FormularioJaRespondidoException.causadaPorUnicidade(e)) return duplicidade();
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
                     .entity(new ErrorResponseDTO("Erro ao salvar formulario no banco de dados"))
                     .build();
         } catch (Exception e) {
+            if (org.femass.service.FormularioJaRespondidoException.causadaPorUnicidade(e)) return duplicidade();
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
                     .entity(new ErrorResponseDTO("Erro inesperado ao processar formulario"))
                     .build();
         }
+    }
+
+    private Response duplicidade() {
+        return Response.status(409).entity(new ErrorResponseDTO("Você já respondeu esta versão do formulário nesta campanha.",
+            "FORMULARIO_JA_RESPONDIDO")).build();
     }
 
 }

@@ -16,7 +16,7 @@ import java.security.MessageDigest;
 import java.nio.ByteBuffer;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.when;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.notNullValue;
@@ -24,6 +24,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @QuarkusTest
 class FormularioResourceTest {
+    @jakarta.inject.Inject CampaignTestFixtures campaignFixtures;
+    @org.junit.jupiter.api.BeforeEach void scheduleFixture() { campaignFixtures.scheduleSeed(); }
+    @org.junit.jupiter.api.AfterEach void clearFixture() { campaignFixtures.clearSeed(); }
     @InjectMock
     VerificacaoEmailService verificacaoEmailService;
 
@@ -36,7 +39,7 @@ class FormularioResourceTest {
     @org.junit.jupiter.api.BeforeEach
     @Transactional
     void liberarVerificacaoParaCenariosLegados() {
-        doNothing().when(verificacaoEmailService).consumirAutorizacaoParaEnvio(any(), any(), any(), any(), any());
+        when(verificacaoEmailService.consumirAutorizacaoParaEnvio(any(), any(), any(), any(), any())).thenReturn(null);
 
         nomeCurso = "Curso de teste issue 8 " + UUID.randomUUID();
         Curso curso = new Curso();
@@ -64,7 +67,7 @@ class FormularioResourceTest {
         String formulario = """
                 {
                   "campaign":"cpa-2026", "form":"discente_disciplinas", "formVersion":1,
-                  "respondent":{"type":"aluno","aceiteTermosCondicoesServico":true},
+                  "respondent":{"type":"aluno","aceiteTermosCondicoesServico":true,"cpf":"11144477735","matricula":"0000000002"},
                   "course":{"name":"%s"},
                   "subjects":[{"subjectId":"%d","answers":[{"questionId":"q1","optionCode":"concordo_totalmente"}]}]
                 }
@@ -100,7 +103,7 @@ class FormularioResourceTest {
     }
 
     @Test
-    void deveDescartarIdentificadoresLegadosDoAluno() {
+    void deveRejeitarMatriculaInvalida() {
         given().contentType("application/json").body("""
                 {
                   "campaign":"cpa-2026", "form":"discente_gestao", "formVersion":1,
@@ -113,6 +116,6 @@ class FormularioResourceTest {
                   },
                   "answers":[{"questionId":"q1","optionCode":"concordo_totalmente"}]
                 }
-                """).when().post("/formulario").then().statusCode(200);
+                """).when().post("/formulario").then().statusCode(400);
     }
 }

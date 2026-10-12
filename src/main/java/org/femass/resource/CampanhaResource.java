@@ -10,7 +10,6 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.femass.dto.DisponibilidadeCampanhaDTO;
 import org.femass.entity.Campanha;
-import org.femass.entity.EstadoCampanha;
 import org.femass.repository.CampanhaRepository;
 
 @ApplicationScoped
@@ -19,6 +18,17 @@ import org.femass.repository.CampanhaRepository;
 public class CampanhaResource {
     @Inject
     CampanhaRepository campanhaRepository;
+
+    @Inject org.femass.service.DisponibilidadeCampanhaService disponibilidadeService;
+
+    @GET
+    @Path("/atual/disponibilidade")
+    public Response atual() {
+        Campanha c = disponibilidadeService.atual();
+        if (c == null) return Response.ok(new DisponibilidadeCampanhaDTO(null, null, false,
+                "Não há campanha disponível para respostas no momento.", null, null)).build();
+        return disponibilidade(c.getCodigo());
+    }
 
     @GET
     @Path("/{codigo}/disponibilidade")
@@ -31,8 +41,8 @@ public class CampanhaResource {
         DisponibilidadeCampanhaDTO dto = new DisponibilidadeCampanhaDTO(
                 campanha.getCodigo(),
                 campanha.getEstado(),
-                campanha.getEstado() == EstadoCampanha.ABERTA,
-                campanha.getMensagemDisponibilidade()
+                disponibilidadeService.disponivel(campanha),
+                campanha.getMensagemDisponibilidade(), campanha.getDataInicio(), campanha.getDataFim()
         );
         return Response.ok(dto).build();
     }
