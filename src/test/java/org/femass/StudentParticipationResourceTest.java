@@ -7,6 +7,8 @@ import jakarta.persistence.EntityManager;
 import org.femass.entity.*;
 import org.femass.service.DisponibilidadeCampanhaService;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import java.util.*;
 import java.util.concurrent.*;
 import static io.restassured.RestAssured.given;
@@ -69,6 +71,8 @@ class StudentParticipationResourceTest {
     private long count(String entity) { return em.createQuery("select count(e) from " + entity + " e where e.formularioVersao.formulario.campanha.codigo = :codigo", Long.class).setParameter("codigo", campaign).getSingleResult(); }
     @Test void bloqueiaCpfOuMatriculaMasPermiteNovaVersaoFormularioECampanha() {
         submit(payload("geral", 1));
+        given().contentType("application/json").body(payload("geral", 1)).post("/formulario")
+            .then().statusCode(409).body("code", is("FORMULARIO_JA_RESPONDIDO"));
         for (var identity : List.of(List.of("529.982.247-25", "9991234567"), List.of("11144477735", "0001234567")))
             given().contentType("application/json").body(payload(campaign, "geral", 1, identity.get(0), identity.get(1))).post("/formulario")
                 .then().statusCode(409).body("code", is("FORMULARIO_JA_RESPONDIDO"));
@@ -78,6 +82,29 @@ class StudentParticipationResourceTest {
         assertEquals(4, count("Validacao")); assertEquals(4, count("Avaliacao"));
         var hashes = em.createQuery("select v.cpfHash from Validacao v where v.formularioVersao.formulario.campanha.codigo = :codigo", String.class).setParameter("codigo", campaign).getResultList();
         assertTrue(hashes.stream().allMatch(hash -> hash.matches("[a-f0-9]{64}")));
+    }
+    @Test void trocarDisciplinaOuExpirarComprovanteNaoLiberaNovaParticipacao() {
+        var first = payload("disciplinas", 1);
+        first.put("subjects", List.of(Map.of("subjectId", disciplines.get(0).toString(), "answers", answers())));
+        String receipt = submit(first);
+        given().queryParam("codigoValidacao", receipt).put("/validacao/validar-hash").then().statusCode(200);
+        QuarkusTransaction.requiringNew().run(() -> {
+            em.createQuery("update Validacao v set v.expiraEm = :expired where v.formularioVersao.formulario.campanha.codigo = :code")
+                .setParameter("expired", java.time.LocalDateTime.now().minusDays(1)).setParameter("code", campaign).executeUpdate();
+            em.createQuery("update Formulario f set f.ativo = false where f.campanha.codigo = :code").setParameter("code", campaign).executeUpdate();
+        });
+        QuarkusTransaction.requiringNew().run(() -> em.createQuery("update Formulario f set f.ativo = true where f.campanha.codigo = :code")
+            .setParameter("code", campaign).executeUpdate());
+        var differentSubject = payload("disciplinas", 1);
+        differentSubject.put("subjects", List.of(Map.of("subjectId", disciplines.get(1).toString(), "answers", answers())));
+        for (var repeated : List.of(first, differentSubject, payload("disciplinas", 1)))
+            given().contentType("application/json").body(repeated).post("/formulario")
+                .then().statusCode(409).body("code", is("FORMULARIO_JA_RESPONDIDO")).body("codigoValidacao", nullValue());
+        assertEquals(1, count("Validacao")); assertEquals(1, count("Avaliacao"));
+        assertEquals(1L, em.createQuery("select count(r) from Resposta r where r.avaliacao.formularioVersao.formulario.campanha.codigo = :code", Long.class)
+            .setParameter("code", campaign).getSingleResult());
+        submit(payload("disciplinas", 2));
+        assertEquals(2, count("Validacao")); assertEquals(3, count("Avaliacao"));
     }
     @Test void vinculaTodasDisciplinasELeituraHistoricaNaoExpoeIdentidadeOuConteudo() {
         String token = submit(payload("disciplinas", 1));
@@ -110,14 +137,17 @@ class StudentParticipationResourceTest {
         assertEquals(0, count("Validacao")); assertEquals(0, count("Avaliacao"));
         submit(payload("disciplinas", 1));
     }
-    @Test void concorrenciaGravaUmaUnicaParticipacao() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"geral", "disciplinas"})
+    void concorrenciaGravaUmaUnicaParticipacao(String form) throws Exception {
         var start = new CountDownLatch(1); var ready = new CountDownLatch(2); var executor = Executors.newFixedThreadPool(2);
         try {
             var futures = new ArrayList<Future<Integer>>();
-            for (int i = 0; i < 2; i++) futures.add(executor.submit(() -> { ready.countDown(); start.await(); return given().contentType("application/json").body(payload("geral", 1)).post("/formulario").statusCode(); }));
+            for (int i = 0; i < 2; i++) futures.add(executor.submit(() -> { ready.countDown(); start.await(); return given().contentType("application/json").body(payload(form, 1)).post("/formulario").statusCode(); }));
             assertTrue(ready.await(5, TimeUnit.SECONDS)); start.countDown();
             var statuses = new ArrayList<Integer>(); for (var f : futures) statuses.add(f.get(20, TimeUnit.SECONDS)); Collections.sort(statuses);
-            assertEquals(List.of(200,409), statuses); assertEquals(1, count("Validacao")); assertEquals(1, count("Avaliacao"));
+            assertEquals(List.of(200,409), statuses); assertEquals(1, count("Validacao"));
+            assertEquals(form.equals("disciplinas") ? 2 : 1, count("Avaliacao"));
         } finally { start.countDown(); executor.shutdownNow(); }
     }
     @Test void geralEDetalhadoPossuemContextoSemDisciplina() {

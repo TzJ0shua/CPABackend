@@ -9,6 +9,9 @@ import org.femass.entity.*;
 import org.femass.service.DisponibilidadeCampanhaService;
 import org.femass.service.EmailSender;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.*;
 import java.util.concurrent.*;
@@ -28,6 +31,7 @@ class StaffParticipationResourceTest {
     private String otherCampaign;
     private String course;
     private Long discipline;
+    private Long otherDiscipline;
     private final Map<String, String> pins = new ConcurrentHashMap<>();
 
     @BeforeEach void setup() {
@@ -39,6 +43,8 @@ class StaffParticipationResourceTest {
         QuarkusTransaction.requiringNew().run(() -> {
             var c = new Curso(); c.setNome(course); em.persist(c);
             var d = new Disciplina(); d.setCurso(c); d.setNome("Disciplina email"); d.setProfessor("Professor"); em.persist(d); discipline = d.getId();
+            var other = new Disciplina(); other.setCurso(c); other.setNome("Outra disciplina email"); other.setProfessor("Outro professor");
+            em.persist(other); otherDiscipline = other.getId();
             for (var code : List.of(campaign, otherCampaign)) {
                 var campanha = new Campanha(); campanha.setCodigo(code); campanha.setNome("Campanha email");
                 campanha.setAtiva(true); campanha.setEstado(EstadoCampanha.ABERTA);
@@ -82,9 +88,10 @@ class StaffParticipationResourceTest {
         } else payload.put("answers", answers);
         return payload;
     }
-    private void submit(Map<String, Object> payload, int status) {
+    private String submit(Map<String, Object> payload, int status) {
         var response = given().contentType("application/json").body(payload).post("/formulario").then().statusCode(status);
-        if (status == 409) response.body("code", is("FORMULARIO_JA_RESPONDIDO"));
+        if (status == 409) response.body("code", is("FORMULARIO_JA_RESPONDIDO")).body("codigoValidacao", nullValue());
+        return status == 200 ? response.extract().path("codigoValidacao") : null;
     }
     private long count(String entity) {
         return em.createQuery("select count(e) from " + entity + " e where e.formularioVersao.formulario.campanha.codigo = :code", Long.class)
@@ -124,19 +131,57 @@ class StaffParticipationResourceTest {
         assertTrue(comments.contains("Comentário geral")); assertTrue(comments.contains("Comentário da disciplina"));
         assertEquals(3, count("Validacao"));
     }
-    @Test void autorizacoesDistintasConcorrentesNaoDuplicamRespostas() throws Exception {
+    @ParameterizedTest
+    @CsvSource({"professor,geral", "funcionario,geral", "professor,disciplinas", "funcionario,disciplinas"})
+    void autorizacoesDistintasConcorrentesNaoDuplicamRespostas(String publico, String form) throws Exception {
         String email = email();
-        var tokens = List.of(authorize(email, "funcionario", campaign), authorize(email, "funcionario", campaign));
+        var tokens = List.of(authorize(email, publico, campaign), authorize(email, publico, campaign));
         var ready = new CountDownLatch(2); var start = new CountDownLatch(1); var executor = Executors.newFixedThreadPool(2);
         try {
             var futures = new ArrayList<Future<Integer>>();
             for (var token : tokens) futures.add(executor.submit(() -> {
                 ready.countDown(); start.await();
-                return given().contentType("application/json").body(payload(campaign, "funcionario", "geral", 1, token)).post("/formulario").statusCode();
+                return given().contentType("application/json").body(payload(campaign, publico, form, 1, token)).post("/formulario").statusCode();
             }));
             assertTrue(ready.await(5, TimeUnit.SECONDS)); start.countDown();
             var statuses = new ArrayList<Integer>(); for (var result : futures) statuses.add(result.get(20, TimeUnit.SECONDS)); Collections.sort(statuses);
             assertEquals(List.of(200, 409), statuses); assertEquals(1, count("Validacao")); assertEquals(1, count("Avaliacao"));
+            assertEquals(1L, em.createQuery("select count(r) from Resposta r where r.avaliacao.formularioVersao.formulario.campanha.codigo = :code", Long.class)
+                .setParameter("code", campaign).getSingleResult());
         } finally { start.countDown(); executor.shutdownNow(); }
+    }
+    @ParameterizedTest
+    @ValueSource(strings = {"professor", "funcionario"})
+    void trocarDisciplinaNovoPinOuExpiracaoNaoLiberaRepeticao(String publico) {
+        String email = email(), token = authorize(email, publico, campaign);
+        String receipt = submit(payload(campaign, publico, "disciplinas", 1, token), 200);
+        given().queryParam("codigoValidacao", receipt).put("/validacao/validar-hash").then().statusCode(200);
+        QuarkusTransaction.requiringNew().run(() -> {
+            em.createQuery("update Validacao v set v.expiraEm = :expired where v.formularioVersao.formulario.campanha.codigo = :code")
+                .setParameter("expired", java.time.LocalDateTime.now().minusDays(1)).setParameter("code", campaign).executeUpdate();
+            em.createQuery("update VerificacaoEmail v set v.autorizacaoExpiraEm = :expired where v.campanha = :code")
+                .setParameter("expired", java.time.LocalDateTime.now().minusMinutes(1)).setParameter("code", campaign).executeUpdate();
+        });
+        submit(payload(campaign, publico, "disciplinas", 1, token), 400);
+        String fresh = authorize(" " + email.toUpperCase(Locale.ROOT) + " ", publico, campaign);
+        submit(payload(campaign, publico, "disciplinas", 1, fresh), 409);
+        var other = payload(campaign, publico, "disciplinas", 1, fresh);
+        other.put("subjects", List.of(Map.of("subjectId", otherDiscipline.toString(), "answers", List.of(Map.of("questionId", "q1", "optionCode", "sim")))));
+        submit(other, 409);
+        assertEquals(1, count("Validacao")); assertEquals(1, count("Avaliacao"));
+        other.put("formVersion", 2); submit(other, 200);
+        assertEquals(2, count("Validacao")); assertEquals(2, count("Avaliacao"));
+    }
+    @ParameterizedTest
+    @ValueSource(strings = {"professor", "funcionario"})
+    void naoPermiteForjarAutorizacaoOuTrocarPublicoECampanha(String publico) {
+        String token = authorize(email(), publico, campaign);
+        submit(payload(campaign, publico, "geral", 1, ""), 400);
+        submit(payload(campaign, publico, "geral", 1, "autorizacao-forjada"), 400);
+        submit(payload(otherCampaign, publico, "geral", 1, token), 400);
+        submit(payload(campaign, publico.equals("professor") ? "funcionario" : "professor", "geral", 1, token), 400);
+        assertEquals(0, count("Validacao")); assertEquals(0, count("Avaliacao"));
+        submit(payload(campaign, publico, "geral", 1, token), 200);
+        assertEquals(1, count("Validacao"));
     }
 }

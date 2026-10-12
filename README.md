@@ -573,6 +573,8 @@ Rodar a suíte de testes:
 
 Testes incluem validação do endpoint `/validacao`.
 
+Veja a [verificação de participação única](docs/VALIDACAO_RESPOSTA_UNICA.md) para as regras por público, exceção da chave mestra e testes de duplicação, concorrência e recarregamento da página.
+
 ## 📝 Notas Importantes
 
 ### Conexão Recusada (Docker)

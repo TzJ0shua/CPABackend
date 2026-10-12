@@ -66,6 +66,7 @@ class ChaveMestraResourceTest {
         submit("funcionario", "funcionario_gestao", token, 400);
         String funcionario = authorize("funcionario", "funcionario_gestao");
         submit("funcionario", "funcionario_gestao", funcionario, 200);
+        submit("funcionario", "funcionario_gestao", funcionario, 200); // Mesma exceção para funcionário.
         submit("professor", "docente_gestao", "chave-exclusiva-dos-testes", 400);
         verify(sender, never()).enviarPin(anyString(), anyString());
     }
