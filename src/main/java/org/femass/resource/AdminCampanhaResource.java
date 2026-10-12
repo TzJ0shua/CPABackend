@@ -24,6 +24,8 @@ public class AdminCampanhaResource {
         return Response.status(201).entity(service.view(service.criarCampanha(dto.codigo, dto.nome, dto.mensagem, dto.dataInicio, dto.dataFim))).build();
     }
     @PUT @Path("/{campaign}") public void atualizarCampanha(@PathParam("campaign") String c, AdminCampanhaDTO dto) { service.atualizarCampanha(c, dto); }
+    @GET @Path("/{campaign}/exclusao") public AdminViews.ExclusaoCampanha exclusao(@PathParam("campaign") String c) { return service.consultarExclusao(c); }
+    @DELETE @Path("/{campaign}") public void excluir(@PathParam("campaign") String c, AdminViews.ExclusaoCampanha confirmacao) { service.excluirCampanha(c, confirmacao); }
     @PATCH @Path("/{campaign}/status") public void statusCampanha(@PathParam("campaign") String c, AdminViews.Status dto) { service.statusCampanha(c, dto); }
     @GET @Path("/{campaign}/formularios") public List<AdminViews.Formulario> formularios(@PathParam("campaign") String c) { return service.formularios(c); }
     @GET @Path("/{campaign}/formularios/{form}") public AdminViews.Formulario formulario(@PathParam("campaign") String c, @PathParam("form") String f) { return service.consultarFormulario(c, f); }

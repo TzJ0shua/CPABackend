@@ -18,6 +18,7 @@ public class AdministracaoCampanhaService {
     @Inject FormularioVersaoRepository versaoRepository;
     @Inject PerguntaVersaoRepository perguntaRepository;
     @Inject OpcaoPerguntaRepository opcaoRepository;
+    @Inject ExclusaoCampanhaService exclusao;
 
     public List<AdminViews.Campanha> listar() {
         return campanhaRepository.find("order by nome, id").list().stream().map(this::view).toList();
@@ -50,6 +51,19 @@ public class AdministracaoCampanhaService {
     @Transactional public void statusCampanha(String codigo, AdminViews.Status dto) {
         bloquearAgendamento();
         Campanha c = campanhaParaEdicao(codigo); c.setAtiva(ativo(dto)); validarSobreposicao(c);
+    }
+    @Transactional public AdminViews.ExclusaoCampanha consultarExclusao(String codigo) {
+        return exclusao.resumo(campanhaParaEdicao(codigo));
+    }
+    @Transactional public void excluirCampanha(String codigo, AdminViews.ExclusaoCampanha confirmacao) {
+        if (confirmacao == null) throw bad("Consulte e confirme os dados da exclusão antes de excluir a campanha");
+        bloquearAgendamento();
+        Campanha c = campanhaParaEdicao(codigo);
+        if (!exclusao.resumo(c).equals(confirmacao))
+            throw conflict("Os dados da campanha mudaram. Consulte a exclusão e confirme novamente.");
+        exclusao.excluirConteudo(c);
+        campanhaRepository.delete(c);
+        campanhaRepository.flush();
     }
     private void bloquearAgendamento() {
         campanhaRepository.getEntityManager().createNativeQuery("SELECT pg_advisory_xact_lock(734219610)").getSingleResult();

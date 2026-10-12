@@ -16,6 +16,7 @@ import java.time.Instant;
 import java.util.*;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.containsString;
 
 /** Exercises real discovery, signature, audience and realm-role validation; no TestSecurity bypass. */
 @QuarkusTest
@@ -24,7 +25,8 @@ import static org.hamcrest.Matchers.notNullValue;
 class AdminOidcResourceTest {
     public static class Profile implements QuarkusTestProfile {
         public Map<String, String> getConfigOverrides() {
-            return Map.of("quarkus.oidc.enabled", "true", "%test.quarkus.oidc.enabled", "true", "quarkus.keycloak.devservices.enabled", "false");
+            return Map.of("quarkus.oidc.enabled", "true", "%test.quarkus.oidc.enabled", "true", "quarkus.keycloak.devservices.enabled", "false",
+                "quarkus.http.cors.origins", "http://localhost:5173");
         }
     }
     public static class OidcServer implements QuarkusTestResourceLifecycleManager {
@@ -65,21 +67,37 @@ class AdminOidcResourceTest {
         }
         public void stop() { if (server != null) server.stop(0); }
     }
+    @Test void permitePreflightDeExclusaoNaOrigemDoFrontend() {
+        given().header("Origin", "http://localhost:5173").header("Access-Control-Request-Method", "DELETE")
+            .header("Access-Control-Request-Headers", "authorization,content-type")
+            .options("/admin/campanhas/inexistente").then().statusCode(200)
+            .header("Access-Control-Allow-Origin", "http://localhost:5173")
+            .header("Access-Control-Allow-Methods", containsString("DELETE"));
+    }
     @Test void deveExigirTokenValidoEPerfilAdministrativoNasLeiturasEEscritas() {
         long expires = Instant.now().getEpochSecond() + 300;
         given().get("/admin/cursos").then().statusCode(401).contentType("application/json").body("message", notNullValue());
+        given().get("/admin/campanhas/cpa-2026/exclusao").then().statusCode(401);
+        given().contentType("application/json").body("{}").delete("/admin/campanhas/cpa-2026").then().statusCode(401);
         given().contentType("application/json").body(Map.of("nome", "Sem autenticação")).post("/admin/cursos").then().statusCode(401);
         given().contentType("application/json").body("{}").post("/admin/campanhas/cpa-2026/formularios/clonar").then().statusCode(401);
         given().header("Authorization", "Bearer inválido").get("/admin/cursos").then().statusCode(401);
         given().auth().oauth2(OidcServer.token("cpa-admin", "cpa-backend", Instant.now().getEpochSecond() - 60)).get("/admin/cursos").then().statusCode(401);
         given().auth().oauth2(OidcServer.token("cpa-admin", "outra-api", expires)).get("/admin/cursos").then().statusCode(401);
         String visitor = OidcServer.token("participante", "cpa-backend", expires);
+        given().auth().oauth2(visitor).get("/admin/campanhas/cpa-2026/exclusao").then().statusCode(403);
+        given().auth().oauth2(visitor).contentType("application/json").body("{}").delete("/admin/campanhas/cpa-2026").then().statusCode(403);
         given().auth().oauth2(visitor).get("/admin/cursos").then().statusCode(403).contentType("application/json").body("message", notNullValue());
         given().auth().oauth2(visitor).contentType("application/json").body(Map.of("nome", "Não permitido")).post("/admin/cursos").then().statusCode(403);
         given().auth().oauth2(visitor).contentType("application/json").body("{}").post("/admin/campanhas/cpa-2026/formularios/clonar").then().statusCode(403);
         String admin = OidcServer.token("cpa-admin", "cpa-backend", expires);
         given().auth().oauth2(admin.substring(0, admin.lastIndexOf('.') + 1) + "invalid-signature").get("/admin/cursos").then().statusCode(401);
         given().auth().oauth2(admin).get("/admin/cursos").then().statusCode(200);
+        String code = "oidc-delete-" + UUID.randomUUID();
+        given().auth().oauth2(admin).contentType("application/json").body(Map.of("codigo", code, "nome", "Campanha OIDC",
+            "dataInicio", "2038-01-01", "dataFim", "2038-01-01")).post("/admin/campanhas").then().statusCode(201);
+        String preview = given().auth().oauth2(admin).get("/admin/campanhas/" + code + "/exclusao").then().statusCode(200).extract().asString();
+        given().auth().oauth2(admin).contentType("application/json").body(preview).delete("/admin/campanhas/" + code).then().statusCode(204);
         given().auth().oauth2(admin).contentType("application/json").body(Map.of("nome", "Curso OIDC " + UUID.randomUUID())).post("/admin/cursos").then().statusCode(201);
         given().get("/campanhas/cpa-2026/disponibilidade").then().statusCode(200);
     }

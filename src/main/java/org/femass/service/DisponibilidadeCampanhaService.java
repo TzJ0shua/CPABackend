@@ -2,6 +2,7 @@ package org.femass.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.persistence.LockModeType;
 import org.femass.entity.Campanha;
 import org.femass.entity.EstadoCampanha;
 import org.femass.repository.CampanhaRepository;
@@ -29,7 +30,9 @@ public class DisponibilidadeCampanhaService {
     }
 
     public void exigirDisponivel(String codigo) {
-        if (!disponivel(repository.findByCodigo(codigo)))
+        // Called inside submission/access transactions. Deletion and administrative
+        // changes wait until accepted responses and access authorizations finish.
+        if (!disponivel(repository.find("codigo", codigo).withLock(LockModeType.PESSIMISTIC_READ).firstResult()))
             throw new CampanhaIndisponivelException("A campanha não está disponível para respostas no período atual.");
     }
 }

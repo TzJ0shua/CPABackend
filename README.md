@@ -735,9 +735,20 @@ publicação, aprovação, abertura e encerramento permanecem disponíveis.
 
 Use `PATCH .../status` com `{"ativo":false}` para desativar e `{"ativo":true}`
 para reativar campanhas, cursos, disciplinas, formulários e versões. A migração
-Flyway V13 mantém os registros anteriores ativos. Não há exclusão física.
+Flyway V13 mantém os registros anteriores ativos. Essas ações não apagam registros.
 Filhos de pais inativos ficam indisponíveis na pesquisa, mas mantêm o próprio
 estado. Respostas históricas continuam acessíveis.
+
+### Exclusão definitiva de campanhas
+
+Campanhas podem ser excluídas com ou sem respostas, exclusivamente por usuários com `cpa-admin`. No painel, **Excluir campanha** consulta o resumo atual antes de abrir o diálogo nativo do navegador. O aviso informa a quantidade de respostas (ou que não há respostas atreladas), explica quais dados serão apagados e permite cancelar.
+
+1. `GET /admin/campanhas/{codigo}/exclusao` retorna `id`, `codigo`, `nome` e os totais `formularios`, `versoes`, `perguntas`, `opcoes`, `avaliacoes`, `respostas`, `validacoes` e `autorizacoes`.
+2. Após confirmar, envie esse mesmo JSON no corpo de `DELETE /admin/campanhas/{codigo}`. O sucesso retorna `204`. Corpo ausente retorna `400`, campanha inexistente `404` e resumo desatualizado `409` com `message`; nesse caso, consulte o resumo novamente e obtenha uma nova confirmação. Não repita o DELETE automaticamente.
+
+A exclusão apaga em uma única transação a campanha, todos os seus formulários e versões (inclusive rascunhos e inativas), perguntas, opções, avaliações, respostas, validações/comprovantes vinculados às versões e verificações/autorizações por email ou chave mestra dessa campanha. Os QR Codes excluídos deixam de ser encontrados e essas respostas deixam de aparecer no histórico. Cursos, disciplinas, outras campanhas e validações antigas sem vínculo com uma versão são preservados. O código da campanha pode ser reutilizado após a exclusão.
+
+A confirmação é comparada novamente sob bloqueio da campanha. Envios e criação de autorizações mantêm um bloqueio de leitura até terminar a transação; a exclusão espera essas operações e exige nova confirmação se os totais mudarem. Alterações administrativas e operações de calendário também são coordenadas. Não há mudança no esquema nem migração para essa funcionalidade. Para preservar respostas e comprovantes, use desativação em vez de exclusão.
 
 Perguntas e opções têm `ativo` no payload administrativo (padrão `true` quando
 omitido). Ao salvar um rascunho, códigos existentes preservam seus IDs; itens
