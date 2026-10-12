@@ -6,5 +6,5 @@ public record ResumoValidacaoDTO(Long validacaoId, Campanha campanha, Formulario
     public record Formulario(String codigo, String nome, Integer versao, String publico, String escopo) { }
     public record Curso(Long id, String nome) { }
     public record Disciplina(Long id, String nome, String professor) { }
-    public record Avaliacao(Long id, Curso curso, Disciplina disciplina, List<Long> respostaIds) { }
+    public record Avaliacao(Long id, Curso curso, Disciplina disciplina, List<Long> respostaIds, Formulario formulario) { }
 }

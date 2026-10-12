@@ -15,6 +15,8 @@ O limite é uma participação por **versão do formulário na campanha**, confo
 
 O backend retorna `code: FORMULARIO_JA_RESPONDIDO` no conflito. Não confia no email informado no corpo do envio: utiliza a identidade da autorização confirmada. O frontend apresenta o aviso de repetição e não repete o POST automaticamente.
 
+Atualização do fluxo do aluno: a interface percorre os formulários em sequência e consulta o progresso por CPF e matrícula para retomar apenas pendências. Um conflito de participação dispara a consulta do progresso, sem reenviar a resposta; o comprovante final aparece somente ao concluir a campanha. Veja a seção **Sequência e retomada dos alunos** no README. Os testes de navegador do aluno estão em `student-journey.e2e.ts` e `student-identity.e2e.ts`.
+
 O limite também se aplica a formulários por disciplina. Trocar a disciplina não libera uma segunda participação na mesma versão; as disciplinas desejadas devem ser incluídas no envio inicial. Validar o QR Code ou expirar o comprovante não libera uma nova participação. Desativar e reativar o formulário preserva o vínculo de participação.
 
 ## Cenários e resultados

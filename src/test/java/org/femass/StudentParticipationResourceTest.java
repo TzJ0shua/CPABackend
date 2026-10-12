@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class StudentParticipationResourceTest {
     @Inject EntityManager em;
     @Inject DisponibilidadeCampanhaService disponibilidade;
+    @Inject org.femass.service.AdministracaoCampanhaService administracao;
     private String campaign;
     private String otherCampaign;
     private String course;
@@ -69,6 +70,69 @@ class StudentParticipationResourceTest {
         return given().contentType("application/json").body(dto).post("/formulario").then().statusCode(200).extract().path("codigoValidacao");
     }
     private long count(String entity) { return em.createQuery("select count(e) from " + entity + " e where e.formularioVersao.formulario.campanha.codigo = :codigo", Long.class).setParameter("codigo", campaign).getSingleResult(); }
+    private io.restassured.response.ValidatableResponse progress(String code) {
+        return given().contentType("application/json").body(Map.of("campaign", code, "cpf", "52998224725", "matricula", "0001234567",
+            "aceiteTermosCondicoesServico", true)).post("/formulario/aluno/progresso").then();
+    }
+    @Test void retomaPendentesELiberaComprovanteDeTodaCampanhaSomenteNoFim() {
+        progress(campaign).statusCode(200).body("concluida", is(false)).body("comprovante", nullValue())
+            .body("formularios.size()", is(6)).body("formularios.findAll { it.respondido }.size()", is(0));
+        submit(payload("geral", 1));
+        progress(campaign).statusCode(200).body("concluida", is(false)).body("comprovante", nullValue())
+            .body("formularios.findAll { it.respondido }.size()", is(1));
+        assertEquals(0L, em.createQuery("select count(j) from JornadaAluno j where j.campanha.codigo = :code", Long.class).setParameter("code", campaign).getSingleResult());
+        for (var form : List.of("geral", "outro", "disciplinas")) for (int version = 1; version <= 2; version++)
+            if (!form.equals("geral") || version != 1) submit(payload(form, version));
+        String qr = progress(campaign).statusCode(200).header("Cache-Control", "no-store").body("concluida", is(true))
+            .body("formularios.findAll { !it.respondido }.size()", is(0)).extract().path("comprovante.qrCode");
+        progress(campaign).statusCode(200).body("comprovante.qrCode", is(qr));
+        assertEquals(6, count("Validacao")); assertEquals(8, count("Avaliacao"));
+        assertEquals(1L, em.createQuery("select count(j) from JornadaAluno j where j.campanha.codigo = :code", Long.class).setParameter("code", campaign).getSingleResult());
+        given().queryParam("codigoValidacao", qr).put("/validacao/validar-hash").then().statusCode(200)
+            .body("resumo.campanha.codigo", is(campaign)).body("resumo.avaliacoes.size()", is(8))
+            .body("resumo.avaliacoes.findAll { it.formulario != null }.size()", is(8))
+            .body("resumo.avaliacoes.findAll { it.disciplina != null }.size()", is(4));
+        given().get("/validacao/historico").then().statusCode(200)
+            .body("find { it.resumo.campanha?.codigo == '" + campaign + "' }.resumo.avaliacoes.size()", is(8));
+        // Recovery returns the same receipt without undoing its validation or duplicating answers.
+        progress(campaign).statusCode(200).body("comprovante.qrCode", is(qr));
+        given().queryParam("codigoValidacao", qr).put("/validacao/validar-hash").then().statusCode(409);
+        progress(otherCampaign).statusCode(200).body("concluida", is(false)).body("comprovante", nullValue())
+            .body("formularios.findAll { it.respondido }.size()", is(0));
+        var resumo = administracao.consultarExclusao(campaign);
+        assertEquals(7, resumo.validacoes());
+        administracao.excluirCampanha(campaign, resumo);
+        given().queryParam("codigoValidacao", qr).get("/validacao/buscar-hash").then().statusCode(404);
+        assertEquals(0L, em.createQuery("select count(j) from JornadaAluno j where j.campanha.codigo = :code", Long.class).setParameter("code", campaign).getSingleResult());
+        assertEquals(0, count("Validacao")); assertEquals(0, count("Avaliacao"));
+    }
+    @Test void recuperacaoConcorrenteCriaSomenteUmComprovante() throws Exception {
+        for (var form : List.of("geral", "outro", "disciplinas")) for (int n = 1; n <= 2; n++) submit(payload(form, n));
+        var executor = Executors.newFixedThreadPool(2);
+        var ready = new CountDownLatch(2); var start = new CountDownLatch(1);
+        try {
+            var results = new ArrayList<Future<String>>();
+            for (int i = 0; i < 2; i++) results.add(executor.submit(() -> {
+                ready.countDown(); start.await();
+                return progress(campaign).statusCode(200).extract().path("comprovante.qrCode");
+            }));
+            assertTrue(ready.await(5, TimeUnit.SECONDS)); start.countDown();
+            assertEquals(results.get(0).get(20, TimeUnit.SECONDS), results.get(1).get(20, TimeUnit.SECONDS));
+            assertEquals(1L, em.createQuery("select count(j) from JornadaAluno j where j.campanha.codigo = :code", Long.class).setParameter("code", campaign).getSingleResult());
+            assertEquals(6, count("Validacao")); assertEquals(8, count("Avaliacao"));
+        } finally { start.countDown(); executor.shutdownNow(); }
+    }
+    @Test void consultaDeProgressoNaoMisturaIdentificacoesENaoLiberaQrForaDoPeriodo() {
+        submit(payload("geral", 1));
+        given().contentType("application/json").body(Map.of("campaign", campaign, "cpf", "52998224725", "matricula", "9991234567",
+            "aceiteTermosCondicoesServico", true)).post("/formulario/aluno/progresso").then().statusCode(400).body("comprovante", nullValue());
+        given().contentType("application/json").body(Map.of("campaign", campaign, "cpf", "invalido", "matricula", "0001234567",
+            "aceiteTermosCondicoesServico", true)).post("/formulario/aluno/progresso").then().statusCode(400);
+        QuarkusTransaction.requiringNew().run(() -> em.createQuery("update Campanha set dataFim = :expired, dataInicio = :expired where codigo = :code")
+            .setParameter("expired", disponibilidade.hoje().minusDays(1)).setParameter("code", campaign).executeUpdate());
+        progress(campaign).statusCode(409).body("comprovante", nullValue());
+        assertEquals(1, count("Validacao")); assertEquals(1, count("Avaliacao"));
+    }
     @Test void bloqueiaCpfOuMatriculaMasPermiteNovaVersaoFormularioECampanha() {
         submit(payload("geral", 1));
         given().contentType("application/json").body(payload("geral", 1)).post("/formulario")

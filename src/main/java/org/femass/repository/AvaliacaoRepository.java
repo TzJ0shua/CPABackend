@@ -13,7 +13,8 @@ public class AvaliacaoRepository implements PanacheRepositoryBase<Avaliacao, Lon
     public List<Avaliacao> findByValidacao(Long id) {
         return find("select distinct a from Avaliacao a "
                 + "left join fetch a.disciplina d left join fetch d.curso "
-                + "left join fetch a.respostas r where a.validacao.id = ?1 order by a.id, r.id", id).list();
+                + "left join fetch a.respostas r where a.validacao.id = ?1 or exists "
+                + "(select j.id from JornadaAluno j join j.participacoes p where j.comprovante.id = ?1 and p.id = a.validacao.id) order by a.id, r.id", id).list();
     }
 
     public List<Avaliacao> findByPublico(PublicoAvaliacao publico) {

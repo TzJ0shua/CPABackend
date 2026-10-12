@@ -24,6 +24,10 @@ public class IdentidadeAlunoService {
         return new Hashes(hash("cpf:" + campanha + ":" + cpf.replaceAll("\\D", "")),
             hash("matricula:" + campanha + ":" + matricula));
     }
+    public String codigoJornada(Long id, String cpfHash, String matriculaHash) {
+        return hash("comprovante-jornada-aluno:" + id + ":" + cpfHash + ":" + matriculaHash);
+    }
+
     private String hash(String entrada) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");

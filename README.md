@@ -47,6 +47,18 @@ Configure `VALIDACAO_ALUNO_HASH_SEED` no `.env` antes de aceitar alunos e recrie
 
 Leitura simples, leitura detalhada e histórico em `/validacao` incluem `resumo`: `validacaoId`, campanha (código/nome), formulário (código/nome/versão/público/escopo) e avaliações (ID, curso, disciplina/professor e `respostaIds`). O resumo permanece consultável após desativação dos cadastros e não contém CPF, matrícula, hashes pessoais, notas, opções ou comentários. Comprovantes antigos ou avulsos podem não ter contexto de formulário.
 
+### Sequência e retomada dos alunos
+
+A migração `V17__add_student_campaign_journey.sql` cria `jornada_aluno` e `jornada_aluno_validacao`, preservando participações e comprovantes existentes. O frontend conduz o aluno pelos formulários e versões publicados ativos do público aluno na campanha, na ordem administrativa, e apresenta o QR Code somente após concluir todos. Atualize frontend e backend juntos.
+
+`POST /formulario/aluno/progresso` recebe `{ "campaign": "codigo", "cpf": "CPF", "matricula": "10 dígitos", "aceiteTermosCondicoesServico": true }` e retorna `formularios` (itens com `code`, `version`, `respondido`), `concluida` e `comprovante`. A consulta exige campanha disponível e usa os hashes existentes para retomar sem duplicar respostas. Os dois identificadores devem corresponder à identificação anterior; identificações divergentes retornam `400`. Dados pessoais ficam no corpo do POST e a resposta usa `Cache-Control: no-store`.
+
+Enquanto houver pendências, `comprovante` é nulo. Quando todas as versões públicas ativas foram respondidas, o backend cria um único comprovante da jornada e vincula as participações de todos os formulários. Consultas posteriores recuperam o mesmo QR, sem renovar a expiração, desfazer uma validação ou criar novas respostas. Criação concorrente é serializada por bloqueio transacional PostgreSQL. Uma nova versão ativa entra como pendência; versões inativas não são exigidas. Os vínculos históricos do comprovante são preservados.
+
+A seed existente `VALIDACAO_ALUNO_HASH_SEED` também deriva o código opaco do comprovante final com separação de domínio; não há nova variável de ambiente, CPF/matrícula originais ou código recuperável persistido. Conserve essa seed. O endpoint `/formulario` mantém o contrato de envio por versão e seus comprovantes individuais para compatibilidade; o fluxo do aluno usa exclusivamente o comprovante final da jornada.
+
+Na leitura do QR e no histórico, o comprovante da jornada retorna campanha e todas as avaliações vinculadas. O `formulario` no nível da campanha é nulo, pois o comprovante abrange vários formulários; cada item de `avaliacoes` inclui seu próprio `formulario`, além de curso, disciplina e `respostaIds`. A exclusão definitiva de uma campanha também apaga suas jornadas, vínculos e comprovantes finais.
+
 ## Configuração por `.env`
 
 ### Resposta única por email
