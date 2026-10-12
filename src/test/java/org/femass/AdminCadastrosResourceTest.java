@@ -59,7 +59,7 @@ class AdminCadastrosResourceTest {
         given().contentType("application/json").body("{}").patch("/admin/cursos/" + curso + "/status").then().statusCode(400);
         given().get("/admin/cursos/9223372036854775807").then().statusCode(404);
     }
-    @Test void devePreservarIdsRascunhosHistoricoEImutabilidade() {
+    @Test void devePreservarIdsRascunhosHistoricoNaEdicaoPublicada() {
         String campaign = unique();
         String base = "/admin/campanhas/" + campaign;
         given().contentType("application/json").body(java.util.Map.of("codigo", campaign, "nome", "Campanha", "dataInicio", java.time.LocalDate.now(org.femass.service.DisponibilidadeCampanhaService.ZONE).toString(), "dataFim", java.time.LocalDate.now(org.femass.service.DisponibilidadeCampanhaService.ZONE).toString()))
@@ -76,7 +76,12 @@ class AdminCadastrosResourceTest {
             .body("perguntas.find { it.codigo == 'q1' }.opcoes.find { it.code == 'nao_sei' }.ativo", is(false))
             .body("perguntas.find { it.codigo == 'q2' }.ativo", is(false));
         given().post(version + "/publicar").then().statusCode(204);
-        given().contentType("application/json").body(form(QUESTIONS)).put(version).then().statusCode(409);
+        given().contentType("application/json").body(form("""
+          [{"codigo":"q1","texto":"Texto atualizado publicado","ordem":1,"opcoes":[{"code":"sim","label":"Sim atualizado","value":2}]}]
+          """)).put(version).then().statusCode(204);
+        given().get(version).then().body("estado", is("PUBLICADA"))
+            .body("perguntas.find { it.codigo == 'q1' }.id", is((int) questionId))
+            .body("perguntas.find { it.codigo == 'q1' }.texto", is("Texto atualizado publicado"));
         given().post(base + "/aprovar").then().statusCode(204);
         status("/admin/campanhas/cpa-2026", false);
         given().post(base + "/abrir").then().statusCode(204);

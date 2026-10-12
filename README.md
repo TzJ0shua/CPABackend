@@ -63,7 +63,7 @@ Não há limite de solicitações, reenvios por janela ou tentativas de confirma
 
 Comentários dependem de `commentAllowed` (`FORMULARIO_VERSAO.comentario_permitido`) em cada versão. A configuração inicial desabilita comentários em vários formulários, incluindo os formulários de alunos; novos rascunhos também começam com o campo desabilitado. O frontend exibe **Comentários adicionais** somente quando o catálogo retorna `commentAllowed: true`, e envia o conteúdo em `comment` (avaliação geral) ou `subjects[].comment` (por disciplina). O backend salva em `AVALIACAO.comentario`, remove tags HTML e valida o limite de 1000 caracteres.
 
-No painel, abra a versão em rascunho, marque **Permitir comentário**, preencha **Aviso sobre o comentário**, salve e publique. Para versões já publicadas, clone primeiro; a configuração publicada permanece imutável. Confirme o período, aprove e abra a campanha para disponibilizar a nova versão. Habilitar comentários não os torna obrigatórios. Envios com comentários em versões que não os permitem retornam `400`.
+No painel, abra a versão, marque **Permitir comentário** e preencha **Aviso sobre o comentário**. Em rascunhos, salve e publique; em versões publicadas, **Salvar alterações** aplica a configuração imediatamente na mesma versão, mantendo o estado da campanha. Para novas versões em rascunho, confirme o período, aprove e abra a campanha após publicar. Habilitar comentários não os torna obrigatórios. Envios com comentários em versões que não os permitem retornam `400`.
 
 Para Docker Compose, crie `.env` na raiz. Ele é ignorado pelo Git. Os valores abaixo são exemplos locais; substitua todos os placeholders e nunca versione credenciais reais.
 
@@ -690,7 +690,11 @@ que têm `NEW_HASH` nulo. `OLD_TOKEN` não deve voltar a ser usado na validaçã
 
 A resposta `201` contém `{ "codigo": "discente_gestao", "versao": 1 }`. O nome é opcional: quando omitido, é copiado da versão escolhida. Origem e destino devem ser campanhas diferentes; a origem pode estar encerrada ou inativa, e pode-se selecionar qualquer versão existente. O destino precisa estar em rascunho ou aprovado e volta a rascunho após a cópia. Metadados, comentários, perguntas, opções e seus estados individuais de ativação são copiados com novos identificadores, sem alterar a origem ou suas respostas. Os bloqueios das campanhas são adquiridos em ordem para preservar a consistência em operações concorrentes. Código duplicado no destino e destino fora da configuração retornam `409`, dados inválidos `400` e origem/destino/versão inexistente `404`.
 
-A edição de rascunhos continua em `PUT /admin/campanhas/{codigo}/formularios/{formulario}/versoes/{numero}`. Perguntas removidas da lista ou enviadas com `ativo: false` são desativadas, preservando identificadores e opções. Uma lista vazia `perguntas: []` pode ser salva como rascunho; publicação exige pelo menos uma pergunta ativa com opções ativas. Versões publicadas não podem ter perguntas removidas ou editadas; clone uma versão antes de alterar seu conteúdo. A clonagem da versão mais recente dentro do mesmo formulário continua disponível no endpoint existente.
+A edição continua em `PUT /admin/campanhas/{codigo}/formularios/{formulario}/versoes/{numero}` e aceita rascunhos e versões publicadas. Perguntas removidas da lista ou enviadas com `ativo: false` são desativadas, preservando identificadores e opções. Uma lista vazia `perguntas: []` pode ser salva como rascunho; publicação e edição de versões publicadas exigem pelo menos uma pergunta ativa com opções ativas em cada pergunta ativa. A clonagem da versão mais recente dentro do mesmo formulário continua disponível no endpoint existente.
+
+Ao editar uma versão publicada, a API mantém seus identificadores, número, estado de publicação e o estado atual da campanha, inclusive se aprovada, aberta ou encerrada. Nome, público, escopo, ordem, comentários, perguntas e opções são atualizados na própria versão. Respostas anteriores passam a referenciar as perguntas e metadados modificados; notas e rótulos de opções já gravados nas respostas permanecem como enviados. Avaliações, respostas, vínculos de validação e a restrição de uma participação por versão são preservados. Alterações inválidas retornam `400` e são revertidas integralmente. Não há mudança de esquema nem nova migração para essa funcionalidade.
+
+As outras regras permanecem: criar formulário, clonar versão, editar rascunho e publicar versão retorna a campanha a rascunho; clonagem entre campanhas exige destino em rascunho ou aprovado. Aprovação exige campanha ativa em rascunho com versão publicada ativa, e abertura exige campanha ativa e aprovada, período configurado e ausência de sobreposição.
 
 As APIs `/admin/*` exigem token OIDC válido, audiência `cpa-backend` (ou o valor de
 `KEYCLOAK_CLIENT_ID`) e papel de realm `cpa-admin`. O frontend administrativo usa
@@ -737,7 +741,7 @@ estado. Respostas históricas continuam acessíveis.
 
 Perguntas e opções têm `ativo` no payload administrativo (padrão `true` quando
 omitido). Ao salvar um rascunho, códigos existentes preservam seus IDs; itens
-omitidos são desativados. Versões publicadas não aceitam edição de conteúdo.
+omitidos são desativados. Versões publicadas aceitam edição de conteúdo na própria versão, mantendo a campanha no seu estado atual.
 Publicação exige perguntas ativas com opções ativas. Os endpoints públicos
 filtram inativos e rejeitam novos envios referenciando cadastros desativados.
 

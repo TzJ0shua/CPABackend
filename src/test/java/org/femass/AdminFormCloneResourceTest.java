@@ -84,7 +84,7 @@ class AdminFormCloneResourceTest {
         given().get(copy).then().body("perguntas[0].id", is((int) questionId)).body("perguntas[0].ativo", is(false))
             .body("perguntas[0].opcoes[0].id", is((int) optionId));
         given().post(copy + "/publicar").then().statusCode(400);
-        given().contentType("application/json").body(form("[]")).put(sourceVersion).then().statusCode(409);
+        given().contentType("application/json").body(form("[]")).put(sourceVersion).then().statusCode(400);
         assertEquals(snapshot, given().get(sourceVersion).then().extract().jsonPath().getMap(""));
         assertEquals(sourceCampaign, given().get(sourceBase).then().extract().jsonPath().getMap(""));
         assertEquals(answers, em.createQuery("select count(r) from Resposta r where r.perguntaVersao.id = :id", Long.class)

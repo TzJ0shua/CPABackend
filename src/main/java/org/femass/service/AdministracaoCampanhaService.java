@@ -144,10 +144,12 @@ public class AdministracaoCampanhaService {
     @Transactional
     public void atualizarVersao(String c, String f, Integer numero, AdminFormularioDTO dto) {
         FormularioVersao v = versaoParaEdicao(c, f, numero);
-        if (v.getEstado() != EstadoFormularioVersao.RASCUNHO) throw conflict("Somente versões em rascunho podem ser alteradas");
+        boolean publicada = v.getEstado() == EstadoFormularioVersao.PUBLICADA;
         validar(dto);
         if (dto.codigo != null && !f.equals(dto.codigo)) throw conflict("Código do formulário não pode ser alterado");
-        preencher(v, dto); sincronizar(v, dto.perguntas); v.getFormulario().getCampanha().setEstado(EstadoCampanha.RASCUNHO);
+        preencher(v, dto); sincronizar(v, dto.perguntas);
+        if (publicada) validarPerguntasAtivas(v);
+        else v.getFormulario().getCampanha().setEstado(EstadoCampanha.RASCUNHO);
     }
     private void preencher(FormularioVersao v, AdminFormularioDTO dto) {
         v.setNome(dto.nome.trim()); v.setPublico(publico(dto.publico)); v.setOrdem(dto.ordem == null ? 1 : dto.ordem);
@@ -179,12 +181,15 @@ public class AdministracaoCampanhaService {
         FormularioVersao v = versaoParaEdicao(c, f, n);
         if (v.getEstado() != EstadoFormularioVersao.RASCUNHO) throw conflict("Versão em rascunho não encontrada");
         if (!v.isAtivo() || !v.getFormulario().isAtivo() || !v.getFormulario().getCampanha().isAtiva()) throw conflict("Reative a campanha, formulário e versão antes de publicar");
+        validarPerguntasAtivas(v);
+        v.setEstado(EstadoFormularioVersao.PUBLICADA); v.getFormulario().getCampanha().setEstado(EstadoCampanha.RASCUNHO);
+    }
+    private void validarPerguntasAtivas(FormularioVersao v) {
         List<PerguntaVersao> perguntas = perguntaRepository.findByVersion(v.getId()).stream().filter(PerguntaVersao::isAtivo).toList();
         if (perguntas.isEmpty()) throw bad("Formulário deve ter perguntas ativas");
         for (PerguntaVersao p : perguntas) {
             if (opcaoRepository.findByQuestion(p.getId()).stream().noneMatch(OpcaoPergunta::isAtivo)) throw bad("Cada pergunta ativa deve ter opções ativas");
         }
-        v.setEstado(EstadoFormularioVersao.PUBLICADA); v.getFormulario().getCampanha().setEstado(EstadoCampanha.RASCUNHO);
     }
     @Transactional public void aprovar(String codigo) {
         Campanha c = campanhaParaEdicao(codigo);
@@ -203,7 +208,7 @@ public class AdministracaoCampanhaService {
     }
     @Transactional public void encerrar(String codigo) { campanhaParaEdicao(codigo).setEstado(EstadoCampanha.ENCERRADA); }
 
-    // Serialize content/publication/status changes to preserve published versions under concurrent requests.
+    // Serialize content/publication/status changes to keep each version consistent under concurrent requests.
     private Campanha campanhaParaEdicao(String codigo) {
         Campanha c = campanhaRepository.find("codigo", codigo).withLock(LockModeType.PESSIMISTIC_WRITE).firstResult();
         if (c == null) throw missing("Campanha não encontrada"); return c;
